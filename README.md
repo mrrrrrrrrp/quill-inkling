@@ -172,7 +172,6 @@ xhigh and max are the same level.
 - **Compact formats:** FP6 dense weights, a q4 full-attention KV cache (9 KiB per token), and an int8
   sliding-window cache. Each one was kept only if it stayed under the quality bar.
 
-[`bench/PLAN.md`](bench/PLAN.md) logs every experiment, with numbers, kept or rejected.
 [`engine/DESIGN.md`](engine/DESIGN.md) and [`engine/KERNELS.md`](engine/KERNELS.md) describe the engine.
 
 ## Images
@@ -195,7 +194,7 @@ runs in FP32 on the CPU cores.
 | `installer/` | The installer and launcher (Rust): `cargo build --release` gives `inkling.exe` |
 | `engine/` | quill (C++20/CUDA 13): `engine\build.cmd 89` builds it with Visual Studio 2022 |
 | `app/chat.html` | The chat page the server serves at `/` |
-| `bench/` | Benchmark scripts, replay sets, the experiment log, results |
+| `bench/` | Benchmark scripts, replay sets, results |
 | `data/` | WikiText-2 excerpt for the quality (KLD) check |
 | `models/PINS.txt` | Pinned Hugging Face revisions of the three model repositories |
 

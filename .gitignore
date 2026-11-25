@@ -10,7 +10,7 @@ models/*/
 inkling.toml
 bin/
 
-# benchmark runs (results worth keeping go in bench/rp_results.txt and bench/PLAN.md)
+# benchmark runs (results worth keeping go in bench/rp_results.txt)
 bench/*.log
 bench/*.log.*
 bench/kld/*.bin

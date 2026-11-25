@@ -35,8 +35,8 @@ These are the project's own requirements. Keep them unless the user explicitly s
    - Greedy decoding is only for diagnostics.
 4. **VRAM is counted for all processes**, as Task Manager and NVML/`nvidia-smi` show it.
    - `cudaMemGetInfo` reads up to ~650 MiB low under Windows WDDM. Do not size anything with it.
-5. **Read `bench/PLAN.md` before trying an idea.** It logs every experiment with its numbers and whether it was
-   kept or rejected, and most obvious ideas are already in it. `engine/HISTORY.txt` holds the commit messages.
+5. **Check what was already tried.** `engine/HISTORY.txt` holds the engine's commit messages, with the measured
+   numbers of every kept change. `bench/rp_results.txt` holds the reference machine's benchmark history.
 6. **Don't benchmark while the user is chatting with the model.** A benchmark loads the model on the same GPU.
    Ask first.
 
@@ -117,8 +117,7 @@ On the reference machine:
 **So the speed levers, in order:**
 1. More experts on the GPU (more VRAM)
 2. Faster RAM (DDR4 gives ~32–40 GB/s for misses)
-3. More physical cores (the tier is limited by per-core compute as well as RAM bandwidth; see the
-   tierbench notes in PLAN.md)
+3. More physical cores (the tier is limited by per-core compute as well as RAM bandwidth)
 4. GPU-side kernel speed, last: it mostly turns into longer waits for the CPU
 
 **Speculative decoding.** DFlash2 (`incoai/Inkling-2-Mini-DFlash2`) drafts up to 7 tokens. The model verifies the
@@ -215,11 +214,11 @@ starting. An RTX 3090's 24 GB would hold every expert, so the CPU-tier caveats a
 
 ### Fewer cores, other CPUs
 - **Threads:** `cpu_threads` = physical cores − 1. On the reference 8-core CPU, 7 threads measured best (96.0 tok/s);
-  8, 10 and 14 (SMT siblings) were no faster (PLAN.md). With 6 cores, use 5.
+  8, 10 and 14 (SMT siblings) were no faster. With 6 cores, use 5.
 - **AVX2 is required.** The engine is compiled with `/arch:AVX2`, and the tier uses AVX2 intrinsics.
 - **AVX-512 is unexplored** and could help the int8 dots (`src/model/cpu_tier.cpp`).
 - **Cache:** the reference CPU has a 96 MB L3 (X3D). Prefetching predicted misses into L3 was rejected: only 5.4% of
-  accesses would have hit (PLAN.md). Smaller caches should matter little.
+  accesses would have hit. Smaller caches should matter little.
 
 ### Linux
 - **The installer is Windows-only.**
