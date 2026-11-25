@@ -208,7 +208,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("inkling-dl-{}", std::process::id()));
         let dest = dir.join("model.safetensors");
         let url = file_url(m.repo, rev, &f.path);
-        let first = Stop(300 << 20, AtomicBool::new(false), Default::default());
+        // past the first round of WORKERS x 32 MiB chunks, so some are complete when it stops
+        let first = Stop(700 << 20, AtomicBool::new(false), Default::default());
         let r = http.download(&url, &dest, Some(f.size), &f.check, "dflash2", &first);
         assert!(r.unwrap_err().is::<crate::progress::Cancelled>());
         let second = Stop(u64::MAX, AtomicBool::new(false), Default::default());
@@ -216,6 +217,31 @@ mod tests {
         let logs = second.2.lock().unwrap().join("\n");
         assert!(logs.contains("resuming"), "{logs}");
         assert_eq!(dest.metadata().unwrap().len(), f.size);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Network speed test (~1 GB): cargo test --release -- --ignored hf_download_speed --nocapture
+    #[test]
+    #[ignore]
+    fn hf_download_speed() {
+        struct Quiet;
+        impl Reporter for Quiet {
+            fn step(&self, _: &str) {}
+            fn progress(&self, _: &str, _: u64, _: u64) {}
+            fn log(&self, l: &str) {
+                println!("{l}");
+            }
+        }
+        let http = Http::new();
+        let m = &release::MODELS[1];
+        let rev = release::pinned_revision(m.repo).unwrap();
+        let f = list_files(&http, m, rev).unwrap().into_iter().find(|f| f.path == "model.safetensors").unwrap();
+        let dir = std::env::temp_dir().join(format!("inkling-speed-{}", std::process::id()));
+        let dest = dir.join("model.safetensors");
+        let t = std::time::Instant::now();
+        http.download(&file_url(m.repo, rev, &f.path), &dest, Some(f.size), &Check::None, "dflash2", &Quiet).unwrap();
+        let s = t.elapsed().as_secs_f64();
+        println!("SPEED {:.0} MB in {s:.1} s = {:.0} MB/s", f.size as f64 / 1e6, f.size as f64 / 1e6 / s);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

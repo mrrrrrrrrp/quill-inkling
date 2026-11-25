@@ -17,8 +17,10 @@ use std::time::Duration;
 use crate::progress::{Cancelled, Reporter};
 use crate::util::hex;
 
+// 32 MiB chunks (the .part.done files of earlier runs count in these units: keep it), 16 parallel connections.
+// Measured on a 1 Gbit line against Hugging Face's CDN: 1 connection 55 MB/s, 16 connections ~90-115 MB/s.
 const CHUNK: u64 = 32 << 20;
-const WORKERS: usize = 8;
+const WORKERS: usize = 16;
 const RETRIES: u32 = 6;
 
 #[derive(Clone, Debug)]
@@ -40,6 +42,10 @@ impl Http {
             .timeout_connect(Some(Duration::from_secs(30)))
             .timeout_recv_response(Some(Duration::from_secs(60)))
             .timeout_per_read(Some(Duration::from_secs(60)))
+            // keep every worker's connection open between chunks: a new TLS connection per chunk restarts TCP's
+            // slow start, and 32 MiB never gets up to speed (ureq keeps 3 per host by default)
+            .max_idle_connections(4 * WORKERS)
+            .max_idle_connections_per_host(2 * WORKERS)
             .http_status_as_error(false)
             .user_agent(concat!("inkling-installer/", env!("CARGO_PKG_VERSION")))
             .build()
@@ -55,6 +61,27 @@ impl Http {
             Some(t) if url.starts_with("https://huggingface.co/") => r.header("Authorization", format!("Bearer {t}")),
             _ => r,
         }
+    }
+
+    /// Follows redirects once and returns the final URL (Hugging Face's resolve URL -> a signed CDN URL), so the
+    /// chunks go straight to the CDN instead of through a redirect each.
+    fn resolve(&self, url: &str) -> Result<String> {
+        let mut u = url.to_string();
+        for _ in 0..8 {
+            let resp = self.get(&u).config().max_redirects(0).build().header("Range", "bytes=0-0").call()?;
+            let status = resp.status().as_u16();
+            if !(300..400).contains(&status) {
+                return Ok(u);
+            }
+            let loc = resp.headers().get("location").and_then(|v| v.to_str().ok()).context("redirect without a Location")?;
+            u = if loc.starts_with('/') {
+                let origin_end = u.find("://").map(|i| i + 3).and_then(|i| u[i..].find('/').map(|j| i + j)).unwrap_or(u.len());
+                format!("{}{loc}", &u[..origin_end])
+            } else {
+                loc.to_string()
+            };
+        }
+        bail!("too many redirects for {url}")
     }
 
     /// GET a text body; also returns the URL of the next page from a `Link: <...>; rel="next"` header.
@@ -161,16 +188,32 @@ impl Http {
         }
         let f = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(part)
             .with_context(|| format!("opening {}", part.display()))?;
+        // Sparse, so a chunk written far past what has been written so far does not make NTFS zero-fill the gap
+        // first (measured: 16 workers scattering writes into a plain preallocated file ran at ~20 MB/s on a
+        // 1 Gbit line that delivers 100+ MB/s to memory).
+        set_sparse(&f, true);
         f.set_len(size)?;
         let state = Mutex::new(OpenOptions::new().create(true).append(true).open(&state_path)?);
         let queue: Mutex<Vec<u64>> = Mutex::new((0..n).rev().filter(|i| !done.contains(i)).collect());
         let bytes = AtomicU64::new(done.iter().map(|&i| chunk_len(i)).sum());
         let failure: Mutex<Option<anyhow::Error>> = Mutex::new(None);
         let active = AtomicUsize::new(WORKERS);
+        // the CDN URL behind the redirect, shared by the workers; re-resolved when its signature expires
+        let target = Mutex::new(self.resolve(url).unwrap_or_else(|_| url.to_string()));
 
         std::thread::scope(|s| {
             for _ in 0..WORKERS {
                 s.spawn(|| {
+                    // each worker writes through its own handle: synchronous I/O on one shared handle is serialised
+                    let fw = match OpenOptions::new().write(true).open(part) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            *failure.lock().unwrap() = Some(anyhow::Error::from(e).context(format!("opening {}", part.display())));
+                            active.fetch_sub(1, Ordering::SeqCst);
+                            return;
+                        }
+                    };
+                    let f = &fw;
                     loop {
                         if rep.cancelled() || failure.lock().unwrap().is_some() {
                             break;
@@ -179,7 +222,8 @@ impl Http {
                         let (a, len) = (i * CHUNK, chunk_len(i));
                         let mut attempt = 0;
                         loop {
-                            match self.fetch_range(url, &f, a, len, &bytes, rep) {
+                            let u = target.lock().unwrap().clone();
+                            match self.fetch_range(&u, f, a, len, &bytes, rep) {
                                 Ok(()) => {
                                     let _ = writeln!(state.lock().unwrap(), "{i}");
                                     break;
@@ -187,6 +231,12 @@ impl Http {
                                 Err(e) if e.is::<Cancelled>() => break,
                                 Err(e) if attempt < RETRIES => {
                                     attempt += 1;
+                                    if expired(&e) {
+                                        if let Ok(n) = self.resolve(url) {
+                                            *target.lock().unwrap() = n;
+                                        }
+                                        continue;
+                                    }
                                     if attempt >= 2 {
                                         rep.log(&format!("{label}: {e:#}; retrying"));
                                     }
@@ -214,6 +264,7 @@ impl Http {
         if rep.cancelled() {
             return Err(Cancelled.into());
         }
+        set_sparse(&f, false); // every byte is written: an ordinary file again
         Ok(())
     }
 
@@ -254,6 +305,33 @@ impl Http {
         }
         r
     }
+}
+
+/// Marks a file sparse (or back to normal once it has no holes). Best effort: FAT/exFAT have no sparse files.
+fn set_sparse(f: &File, on: bool) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{FILE_SET_SPARSE_BUFFER, FSCTL_SET_SPARSE};
+    let b = FILE_SET_SPARSE_BUFFER { SetSparse: on };
+    let mut ret = 0u32;
+    unsafe {
+        DeviceIoControl(
+            f.as_raw_handle() as _,
+            FSCTL_SET_SPARSE,
+            &b as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<FILE_SET_SPARSE_BUFFER>() as u32,
+            std::ptr::null_mut(),
+            0,
+            &mut ret,
+            std::ptr::null_mut(),
+        );
+    }
+}
+
+/// A signed CDN URL that stopped working (expired or revoked): resolve the original URL again.
+fn expired(e: &anyhow::Error) -> bool {
+    let s = format!("{e:#}");
+    ["HTTP 401", "HTTP 403", "HTTP 404", "HTTP 410"].iter().any(|c| s.contains(c))
 }
 
 fn next_link(h: &str) -> Option<String> {
@@ -355,6 +433,51 @@ pub fn unzip(zip_path: &Path, mut pick: impl FnMut(&str) -> Option<PathBuf>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Where the time goes: cargo test --release -- --ignored speed_split --nocapture
+    #[test]
+    #[ignore]
+    fn speed_split() {
+        struct Quiet;
+        impl Reporter for Quiet {
+            fn step(&self, _: &str) {}
+            fn progress(&self, _: &str, _: u64, _: u64) {}
+            fn log(&self, _: &str) {}
+        }
+        let http = Http::new();
+        let url = "https://huggingface.co/incoai/Inkling-2-Mini-DFlash2/resolve/4f9088ea66c21f2b99ed657d1941c306b03e84d2/model.safetensors";
+        let cdn = http.resolve(url).unwrap();
+        // A: one connection, sequential file writes
+        let dir = std::env::temp_dir().join(format!("inkling-split-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let t = std::time::Instant::now();
+        http.try_stream(&cdn, &dir.join("a.bin"), None, "a", &Quiet).unwrap();
+        let n = dir.join("a.bin").metadata().unwrap().len() as f64;
+        println!("A 1 conn -> file: {:.0} MB/s", n / 1e6 / t.elapsed().as_secs_f64());
+        // B: 16 connections x 32 MiB ranges, data discarded
+        let t = std::time::Instant::now();
+        let total = AtomicU64::new(0);
+        std::thread::scope(|s| {
+            for i in 0..16u64 {
+                let (http, cdn, total) = (&http, &cdn, &total);
+                s.spawn(move || {
+                    let a = i * CHUNK;
+                    let resp = http.get(cdn).header("Range", format!("bytes={}-{}", a, a + CHUNK - 1)).call().unwrap();
+                    let mut r = resp.into_body().into_reader();
+                    let mut buf = vec![0u8; 1 << 20];
+                    loop {
+                        let k = r.read(&mut buf).unwrap();
+                        if k == 0 {
+                            break;
+                        }
+                        total.fetch_add(k as u64, Ordering::Relaxed);
+                    }
+                });
+            }
+        });
+        println!("B 16 conn -> memory: {:.0} MB/s", total.load(Ordering::Relaxed) as f64 / 1e6 / t.elapsed().as_secs_f64());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn parses_link_header() {
