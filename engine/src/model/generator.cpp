@@ -1,0 +1,683 @@
+#include <cuda_profiler_api.h>
+#include "kernels/attn/attn.h"
+// The Generator (engine.Engine): one resident model, one request at a time. Prefill runs in chunks through
+// the Prefiller; plain decoding replays the width-1 graph per token, pipelined (each step's input token
+// stays on the device, the host launches the next step before it reads the current token); with
+// options.spec the speculative loop (SpecLoop) drafts with DSpark and verifies with the width-2/4/8 graphs.
+// A prompt that extends the tokens already in the state only prefills the new suffix; any other prompt
+// starts from an empty state.
+#include "ingine/generator.h"
+
+#include "core/arena.h"
+#include "core/device.h"
+#include "kernels/head/head.h"
+#include "model/drafter.h"
+#include "model/prefill.h"
+#include "model/runtime.h"
+#include "model/cpu_tier.h"
+#include "model/dflash2.h"
+#include "model/spec.h"
+#include "model/vision.h"
+#include "model/vision_cpu.h"
+#include "model/vram_meter.h"
+
+#include <spdlog/spdlog.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdio>
+#include <deque>
+#include <mutex>
+#include <random>
+#include <stdexcept>
+#include <string>
+
+namespace ingine::model {
+namespace {
+
+namespace head = kernels::head;
+
+double seconds_since(std::chrono::steady_clock::time_point t) {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - t).count();
+}
+
+const RuntimeOptions& without_spec(const RuntimeOptions& options) {
+  if (options.spec) throw std::invalid_argument("make_generator over given weights: spec needs the model directory");
+  return options;
+}
+
+class EngineGenerator final : public Generator {
+ public:
+  explicit EngineGenerator(const RuntimeOptions& options)
+      : EngineGenerator(options, std::make_unique<Runtime>(options)) {}
+  EngineGenerator(const RuntimeOptions& options, Weights weights, Ablation ablation)
+      : EngineGenerator(without_spec(options),
+                        std::make_unique<Runtime>(options, std::move(weights), std::move(ablation))) {}
+
+  std::string model_id() const override {
+    return options_.ablation.empty() ? "inkling-2-mini" : "inkling-2-mini-abliterated";
+  }
+
+  int max_model_len() const override { return options_.max_ctx; }
+
+  bool supports_images() const override { return vision_ != nullptr || vision_cpu_ != nullptr; }
+  std::vector<std::uint32_t> route_counts() override { return rt_.route_counts(); }
+  void reset_route_counts() override { rt_.reset_route_counts(); }
+  double profile_steps(int m, int n) override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    CpuTier* c = rt_.cpu_tier();
+    if (c) c->activate();
+    std::vector<std::int32_t> t(std::size_t(m), 1000);
+    // the last m positions of the context (mapped KV), or 64 when it is shorter
+    const int len = rt_.state().length;
+    const int p = len > 64 + m ? len - m : 64;
+    for (int i = 0; i < 3; ++i) rt_.set_inputs(t, p), rt_.run_step(m);
+    CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+    CUDA_CHECK(cudaProfilerStart());
+    if (std::getenv("QUILL_ATTN_DBG")) kernels::attn::debug_enable(true);
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < n; ++i) rt_.set_inputs(t, p), rt_.run_step(m);
+    CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / n;
+    CUDA_CHECK(cudaProfilerStop());
+    if (std::getenv("QUILL_ATTN_DBG")) {
+      kernels::attn::debug_report(("width " + std::to_string(m)).c_str(), n * 40);
+      kernels::attn::debug_enable(false);
+    }
+    if (c) c->deactivate();
+    return ms;
+  }
+
+ private:
+  EngineGenerator(const RuntimeOptions& options, std::unique_ptr<Runtime> runtime)
+      : options_(options),
+        runtime_(std::move(runtime)),
+        rt_(*runtime_),
+        prefiller_(rt_.weights(), rt_.ablation(), options.prefill_chunk, rt_.stream(),
+                   options.lend_prefill_scratch && options.shared_region,
+                   options.spec ? std::size_t(options.prefill_chunk) * NUM_TAPS * HIDDEN * 2 : 0),
+        chunk_tokens_(std::size_t(options.prefill_chunk) * sizeof(std::int32_t)),
+        logits_(std::size_t(UNPADDED_VOCAB) * sizeof(float)),
+        token_(sizeof(std::int32_t)),
+        host_token_(sizeof(std::int32_t)) {
+    if (options.prefill_chunk < 1) throw std::invalid_argument("prefill_chunk must be positive");
+    vram_phase("prefiller (cublasLt)");
+    std::size_t live = device_buffer_live_bytes();
+    auto stage = [&](const char* what) {
+      const std::size_t now = device_buffer_live_bytes();
+      spdlog::info("vram breakdown: {} {:.0f} MiB", what, (now - live) / 1048576.0);
+      live = now;
+    };
+    spdlog::info("vram breakdown: prefill scratch {:.0f} MiB ({})", prefiller_.scratch_bytes() / 1048576.0,
+                 prefiller_.device_bytes() ? "own" : "lent from expert slots");
+    if (options.spec) {  // quill: allocated now (inside the budget), captured after the pools exist
+      if (!options.draft_dir.empty())
+        drafter_ = std::make_unique<DFlash2>(options.draft_dir, rt_.weights(), rt_.stream());
+      else
+        drafter_ = std::make_unique<Drafter>(options.model_dir, rt_.weights(), options.max_ctx, rt_.stream());
+      stage("drafter");
+      if (!prefiller_.taps_scratch()) taps_ = DeviceBuffer(std::size_t(options.prefill_chunk) * NUM_TAPS * HIDDEN * 2);
+      stage("drafter taps");
+    }
+    // checkpoint layout: target state | drafter context | last prompt logits
+    checkpoint_drafter_ = carved(rt_.checkpoint_bytes());
+    checkpoint_logits_ = checkpoint_drafter_ + (drafter_ ? carved(drafter_->checkpoint_bytes()) : 0);
+    // quill: in pinned host memory (written after each prefill, ~8 ms for 205 MB; read on a branch or unpark)
+    checkpoint_ = std::make_unique<MappedHostBuffer>(checkpoint_logits_ + logits_.bytes);
+    vram_phase("drafter, taps, checkpoint");
+    // the vision tower's weights are resident: loaded before the park budget below is measured
+    if (options.vision && options.vision_cpu) {
+      vision_cpu_ = std::make_unique<VisionCpuEncoder>(options.model_dir, options.vision_threads);
+    } else if (options.vision) {
+      vision_ = std::make_unique<VisionEncoder>(options.model_dir, rt_.stream());
+    }
+    CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+    // quill: everything else is allocated: the expert pools take what is left under the cap
+    if (!rt_.finalized()) rt_.finalize(std::size_t(options.vram_reserve_mib) << 20);
+    if (options.lend_prefill_scratch && options.shared_region) {
+      void* block = rt_.lend_block(prefiller_.scratch_bytes());
+      if (!block)
+        throw std::runtime_error("the prefill scratch does not fit above the KV cache of max_ctx in the expert region: "
+                                 "lower --max-ctx or --prefill-chunk");
+      prefiller_.bind(block);
+    }
+    if (drafter_) {
+      drafter_->capture();
+      spec_ = std::make_unique<SpecLoop>(rt_, *drafter_);
+      CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+      vram_phase("drafter graphs");
+    }
+    if (options.park_mb < 0) {  // leave room for the workspaces a long prefill adds later
+      std::size_t free = 0, total = 0;
+      CUDA_CHECK(cudaMemGetInfo(&free, &total));
+      park_budget_ = std::min<std::size_t>(3072, std::max<std::size_t>(free >> 20, 4096) - 4096) << 20;
+    } else {
+      park_budget_ = std::size_t(options.park_mb) << 20;
+    }
+    // parked conversations are best-effort: a device allocation that fails releases them and retries
+    release_hook_ = add_release_hook([this] { return release_parked(); });
+  }
+
+ public:
+  GenerateStats generate(std::span<const std::int32_t> prompt, int max_new_tokens, const Sampling& sampling,
+                         std::span<const std::int32_t> stop_ids,
+                         const std::function<bool(std::span<const std::int32_t>)>& on_tokens) override {
+    return generate(Prompt{prompt, {}}, max_new_tokens, sampling, stop_ids, on_tokens);
+  }
+
+  GenerateStats generate(const Prompt& full_prompt, int max_new_tokens, const Sampling& sampling,
+                         std::span<const std::int32_t> stop_ids,
+                         const std::function<bool(std::span<const std::int32_t>)>& on_tokens) override {
+    const std::span<const std::int32_t> prompt = full_prompt.ids;
+    if (prompt.empty()) throw std::invalid_argument("prompt is empty");
+    const int n = int(prompt.size());
+    const int image_tokens = check_images(full_prompt);
+    if (!sampling.forced.empty()) max_new_tokens = std::min(max_new_tokens, int(sampling.forced.size()));
+    // a verify call writes up to max(verify widths) positions
+    const int reserve = drafter_ ? *std::max_element(rt_.verify_widths().begin(), rt_.verify_widths().end()) : 0;
+    if (n + std::int64_t(max_new_tokens) + reserve > options_.max_ctx) {
+      max_new_tokens = options_.max_ctx - n - reserve;
+      if (max_new_tokens <= 0)
+        throw std::invalid_argument("prompt of " + std::to_string(n) + " tokens does not fit max_ctx " +
+                                    std::to_string(options_.max_ctx));
+    }
+    GenerateStats stats;
+    head::SamplerRng rng;
+    rng.seed = sampling.seed ? *sampling.seed : (std::uint64_t(std::random_device{}()) << 32) ^ std::random_device{}();
+    std::lock_guard<std::mutex> lock(mutex_);
+    // quill: the CPU tier's workers spin while this request runs (hybrid MoE decode steps)
+    struct CpuActive {
+      CpuTier* c;
+      explicit CpuActive(CpuTier* t) : c(t) { if (c) c->activate(); }
+      ~CpuActive() { if (c) c->deactivate(); }
+    } cpu_active(rt_.cpu_tier());
+
+    auto t = std::chrono::steady_clock::now();
+    try {
+      prefill(prompt, full_prompt.images, stats);
+      stats.prompt_tokens = n;
+      stats.image_tokens = image_tokens;
+      if (spec_) {
+        std::int32_t token = sample(static_cast<const float*>(logits_.p), sampling, rng);
+        if (!sampling.forced.empty()) token = sampling.forced[0];
+        stats.prefill_seconds = seconds_since(t);
+        t = std::chrono::steady_clock::now();
+        if (max_new_tokens > 0) {
+          drafter_->set_seed(rng.seed);
+          spec_->generate(token, max_new_tokens, sampling, rng, stop_ids, on_tokens, stats, tokens_in_state_);
+        }
+      } else {
+        decode(n, max_new_tokens, sampling, rng, stop_ids, on_tokens, stats, t);
+      }
+      CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+    } catch (...) {
+      forget_state();
+      throw;
+    }
+    stats.decode_seconds = seconds_since(t);
+    return stats;
+  }
+
+  ~EngineGenerator() override {
+    remove_release_hook(release_hook_);
+    // nothing queued may outlive the graphs and buffers of the members destroyed below
+    if (rt_.stream()) cudaStreamSynchronize(rt_.stream());
+  }
+
+ private:
+  // quill: an image's rows from whichever tower is loaded. The CPU tower runs with the CPU tier's workers paused (they
+  // spin only while a decode runs), so its threads get the cores.
+  DeviceBuffer encode_image(const PromptImage& image) {
+    if (!vision_cpu_) return vision_->encode(image.rgb->data(), image.height, image.width);
+    struct Pause {
+      CpuTier* c;
+      explicit Pause(CpuTier* t) : c(t) { if (c) c->deactivate(); }
+      ~Pause() { if (c) c->activate(); }
+    } pause(rt_.cpu_tier());
+    return vision_cpu_->encode(image.rgb->data(), image.height, image.width);
+  }
+
+  // The images of a prompt lie inside it, in order and without overlap, and cover exactly its negative ids
+  // (an image token's id; anything else negative would index outside the embedding table). Returns their tokens.
+  int check_images(const Prompt& prompt) const {
+    if (!prompt.images.empty() && !vision_ && !vision_cpu_) {
+      throw std::invalid_argument("the prompt has images but the vision tower is not loaded (RuntimeOptions::vision)");
+    }
+    const std::int64_t n = std::int64_t(prompt.ids.size());
+    std::int64_t end = 0, tokens = 0;
+    for (const PromptImage& image : prompt.images) {
+      if (!image.rgb || image.height < 1 || image.width < 1 ||
+          image.rgb->size() != std::size_t(image.height) * std::size_t(image.width) * 3) {
+        throw std::invalid_argument("a prompt image has no pixels or pixels of another size");
+      }
+      if (image.pos < end || std::int64_t(image.pos) + image.tokens() > n) {
+        throw std::invalid_argument("the prompt's images overlap, are out of order or lie outside the prompt");
+      }
+      end = std::int64_t(image.pos) + image.tokens();
+      tokens += image.tokens();
+    }
+    const std::int64_t negative = std::count_if(prompt.ids.begin(), prompt.ids.end(), [](std::int32_t id) { return id < 0; });
+    bool covered = negative == tokens;
+    for (const PromptImage& image : prompt.images) {
+      for (int k = 0; covered && k < image.tokens(); ++k) covered = prompt.ids[std::size_t(image.pos + k)] < 0;
+    }
+    if (!covered) throw std::invalid_argument("negative token ids of the prompt are not exactly its image tokens");
+    return int(tokens);
+  }
+
+  // After a failure anywhere in a request the device state may be ahead of or behind tokens_in_state_ (a step
+  // in flight, a partial prefill, a round between launch and bookkeeping): wait for the stream and forget
+  // everything reusable, so the next request starts from an empty state.
+  void forget_state() noexcept {
+    cudaStreamSynchronize(rt_.stream());
+    tokens_in_state_.clear();
+    checkpoint_ids_.clear();
+    if (drafter_) drafter_->reset();  // stream-ordered; CUDA failures abort (CUDA_CHECK)
+  }
+
+  // Plain decoding after the prefill of n tokens (logits in logits_): the token at position p is sampled on
+  // the device, chain_advance makes it the width-1 step's input, and the step at p is launched before the
+  // host reads that token, so the GPU never waits for the host. A step launched for a token that ends the
+  // generation (stop token, cancel) is undone, leaving the state at tokens_in_state_. Sets prefill_seconds
+  // (until the first token is known) and restarts `t` for the decode time.
+  void decode(int n, int max_new_tokens, const Sampling& sampling, head::SamplerRng& rng,
+              std::span<const std::int32_t> stop_ids,
+              const std::function<bool(std::span<const std::int32_t>)>& on_tokens, GenerateStats& stats,
+              std::chrono::steady_clock::time_point& t) {
+    const cudaStream_t stream = rt_.stream();
+    const head::SamplingParams params{sampling.temperature, sampling.top_k, sampling.top_p};
+    auto* sampled = static_cast<std::int32_t*>(token_.p);
+    // forced replay: the forced tokens on the device; each sampled token is replaced by its forced one
+    DeviceBuffer forced;
+    if (!sampling.forced.empty()) {
+      forced = DeviceBuffer(sampling.forced.size_bytes());
+      CUDA_CHECK(cudaMemcpyAsync(forced.p, sampling.forced.data(), sampling.forced.size_bytes(),
+                                 cudaMemcpyHostToDevice, stream));
+    }
+    // engine._sample of the logits into `sampled`, then the inputs of the step at `position`
+    auto sample_for = [&](const float* logits, int position) {
+      head::sample(logits, 1, UNPADDED_VOCAB, UNPADDED_VOCAB, params, rng, sampled, stream);
+      if (forced.p)
+        CUDA_CHECK(cudaMemcpyAsync(sampled, static_cast<const std::int32_t*>(forced.p) + (position - n),
+                                   sizeof(std::int32_t), cudaMemcpyDeviceToDevice, stream));
+      rt_.chain_advance(sampled, position);
+    };
+    // the step at `position` (its input token is on the device), then the next token
+    auto launch = [&](int position) { sample_for(rt_.run_step(1), position + 1); };
+    auto is_stop = [&](std::int32_t tok) { return std::find(stop_ids.begin(), stop_ids.end(), tok) != stop_ids.end(); };
+
+    // quill: the prompt's routing steers the expert pool before decoding starts
+    {
+      const std::vector<std::uint32_t> pc = prefiller_.take_counts();
+      rt_.residency_observe(pc.data(), 1.0);
+      static const int prefill_swaps = [&] {
+        const char* e = std::getenv("QUILL_PREFILL_SWAPS");
+        return e ? std::atoi(e) : options_.adapt_prefill_swaps;
+      }();
+      rt_.residency_step(prefill_swaps, false);
+    }
+    rt_.ensure_kv(n + 2 * options_.adapt_interval + 16);
+    sample_for(static_cast<const float*>(logits_.p), n);
+    if (max_new_tokens > 1) launch(n);
+    std::int32_t token = rt_.chain_token(n);
+    stats.prefill_seconds = seconds_since(t);
+    t = std::chrono::steady_clock::now();
+    for (int i = 0; i < max_new_tokens; ++i) {
+      // `token` is at position n + i; its step is in flight unless it is the budget's last token
+      const bool last = i + 1 == max_new_tokens;
+      stats.generated_tokens = i + 1;
+      const std::int32_t out[1] = {token};
+      const bool go_on = on_tokens(out);
+      if (last || is_stop(token) || !go_on) {
+        if (!last) rt_.chain_undo(n + i);
+        break;
+      }
+      tokens_in_state_.push_back(token);
+      if (i + 2 < max_new_tokens) launch(n + i + 1);
+      if ((i + 1) % options_.adapt_interval == 0) {  // quill: KV front ahead of decoding, then residency
+        rt_.ensure_kv(n + i + 2 * options_.adapt_interval + 16);
+        rt_.residency_step(options_.adapt_swaps, true);
+      }
+      token = rt_.chain_token(n + i + 1);
+    }
+  }
+
+  // engine._prefill with prompt checkpoints: brings the state to `ids` (last logits in logits_) and sets
+  // stats.reused_tokens and stats.reuse.
+  // * Extend: `ids` extends tokens_in_state_ (the previous prompt and the generated tokens processed since):
+  //   prefill the new suffix.
+  // * Checkpoint: the prompt of the request that saved the checkpoint (the state right after its prefill) is a
+  //   prefix of `ids`: restore it and prefill the rest. This is the agent-loop case: the next prompt
+  //   re-renders the previous answer differently from the tokens the model generated.
+  // * Parked: a parked conversation's prompt is a longer prefix of `ids` than the live state offers: park the
+  //   live conversation, restore the parked one's checkpoint and prefill the rest.
+  // * None: park the live conversation, reset and prefill everything.
+  // After a prefill the checkpoint moves to the end of `ids`.
+  //
+  // Images: an image token's id is a function of the image's content, so the comparisons above tell images
+  // apart. The vision tower encodes an image when the first chunk that holds some of its tokens is reached
+  // (images inside the reused prefix are not encoded again), and the Prefiller writes its rows over the
+  // embeddings of its tokens; an image may span chunks.
+  void prefill(std::span<const std::int32_t> ids, std::span<const PromptImage> images, GenerateStats& stats) {
+    const std::vector<std::int32_t>& prev = tokens_in_state_;
+    const std::size_t n = ids.size();
+    const bool drafter_in_step = !drafter_ || drafter_->length() == int(prev.size());  // else a row is missing
+    State& st = rt_.state();
+    const cudaStream_t stream = rt_.stream();
+    const bool extend =
+        drafter_in_step && !prev.empty() && prev.size() < n && std::equal(prev.begin(), prev.end(), ids.begin());
+    const bool checkpoint = !extend && !checkpoint_ids_.empty() && checkpoint_ids_.size() <= n &&
+                            std::equal(checkpoint_ids_.begin(), checkpoint_ids_.end(), ids.begin());
+    Parked* parked = find_parked(ids, extend ? prev.size() : checkpoint ? checkpoint_ids_.size() : 0);
+    std::size_t start = 0;
+    if (parked) {
+      // parking the live conversation may move the parked list (never evicting the one to restore)
+      const std::vector<std::int32_t> keep = parked->ids;
+      park_live(&keep);
+      unpark(*std::find_if(parked_.begin(), parked_.end(), [&](const Parked& p) { return p.ids == keep; }));
+      restore_checkpoint();
+      start = checkpoint_ids_.size();
+      stats.reuse = Reuse::Parked;
+    } else if (extend) {
+      start = prev.size();
+      stats.reuse = Reuse::Extend;
+    } else if (checkpoint) {
+      restore_checkpoint();
+      start = checkpoint_ids_.size();
+      stats.reuse = Reuse::Checkpoint;
+    } else {
+      park_live();
+      reset_state(st, stream);
+      if (drafter_) drafter_->reset();
+      tokens_in_state_.clear();
+      checkpoint_ids_.clear();
+      stats.reuse = Reuse::None;
+    }
+    st.length = int(start);  // decode steps advance the state without its host-side length
+    const std::size_t chunk = std::size_t(options_.prefill_chunk);
+    struct Encoded {
+      const PromptImage* image;
+      DeviceBuffer rows;  // bf16 [>= tokens, HIDDEN]
+    };
+    std::deque<Encoded> encoded;  // images whose rows the chunks still need (or were queued to read)
+    std::size_t next_image = 0;
+    while (next_image < images.size() &&
+           std::size_t(images[next_image].pos) + std::size_t(images[next_image].tokens()) <= start) {
+      ++next_image;  // inside the reused prefix
+    }
+    std::vector<EmbedRows> rows;
+    rt_.set_kv_length(int(start) + 64);  // quill: the shared region's KV front follows the conversation
+    // quill: a short new tail (a chat turn) runs through the decode step graphs, 8 rows at a time with the CPU
+    // tier for non-resident experts, instead of a prefill chunk that uploads every missing expert of every layer
+    // (~0.35 s for any chunk) and borrows the prefill scratch
+    static const int step_limit = [] {
+      const char* e = std::getenv("QUILL_STEP_PREFILL");
+      return e ? std::atoi(e) : 48;  // 8-row steps of diverse prompt tokens cost ~54 ms: break-even ~45 tokens
+    }();
+    const bool by_steps = images.empty() && n > start && int(n - start) <= step_limit && rt_.has_width(8);
+    if (by_steps) {
+      for (std::size_t s = start; s < n;) {
+        int m = 8;
+        while (m > int(n - s)) m /= 2;
+        rt_.ensure_kv(int(s) + m + 64);
+        rt_.set_inputs(ids.subspan(s, std::size_t(m)), int(s));
+        const float* lg = rt_.run_step(m);
+        if (drafter_) {
+          Tensor taps = rm(rt_.buffers(m).taps.data, DType::BF16, {m, NUM_TAPS, HIDDEN});
+          drafter_->note_tokens(ids.subspan(s, std::size_t(m)));
+          drafter_->commit(taps, int(s));
+        }
+        if (s + std::size_t(m) == n)
+          CUDA_CHECK(cudaMemcpyAsync(logits_.p, lg + std::size_t(m - 1) * UNPADDED_VOCAB, logits_.bytes,
+                                     cudaMemcpyDeviceToDevice, stream));
+        s += std::size_t(m);
+      }
+      tokens_in_state_.assign(ids.begin(), ids.end());
+      save_checkpoint();
+      stats.reused_tokens = int(start);
+      return;
+    }
+    struct ScratchLease {  // quill: the lent expert slots hold the prefill scratch for the chunks below
+      Runtime& rt;
+      ~ScratchLease() { rt.scratch_release(); }
+    } lease{rt_};
+    if (start < n) {
+      rt_.scratch_acquire();
+      prefiller_.zero(stream);
+    }
+    for (std::size_t s = start; s < n; s += chunk) {
+      const int T = int(std::min(chunk, n - s));
+      rt_.ensure_kv(int(s) + T + 64);
+      for (; next_image < images.size() && std::size_t(images[next_image].pos) < s + std::size_t(T); ++next_image) {
+        const PromptImage& image = images[next_image];
+        const auto t = std::chrono::steady_clock::now();
+        DeviceBuffer out = encode_image(image);
+        // encode() returns with the stream idle: the rows of images that ended before this chunk have been read
+        while (!encoded.empty() && std::size_t(encoded.front().image->pos + encoded.front().image->tokens()) <= s) {
+          encoded.pop_front();
+        }
+        encoded.push_back(Encoded{&image, std::move(out)});
+        stats.vision_seconds += seconds_since(t);
+        ++stats.images_encoded;
+      }
+      rows.clear();
+      for (const Encoded& e : encoded) {
+        const std::int64_t first = std::max<std::int64_t>(e.image->pos, std::int64_t(s));
+        const std::int64_t last = std::min<std::int64_t>(std::int64_t(e.image->pos) + e.image->tokens(), std::int64_t(s) + T);
+        if (first < last) {
+          rows.push_back(EmbedRows{int(first - std::int64_t(s)), int(last - first),
+                                   static_cast<const __nv_bfloat16*>(e.rows.p) + std::size_t(first - e.image->pos) * HIDDEN});
+        }
+      }
+      CUDA_CHECK(cudaMemcpyAsync(chunk_tokens_.p, ids.data() + s, std::size_t(T) * sizeof(std::int32_t),
+                                 cudaMemcpyHostToDevice, stream));
+      Tensor taps;
+      if (drafter_) taps = rm(prefiller_.taps_scratch() ? prefiller_.taps_scratch() : taps_.p, DType::BF16, {T, NUM_TAPS, HIDDEN});
+      prefiller_.run(st, static_cast<const std::int32_t*>(chunk_tokens_.p), T, int(s), static_cast<float*>(logits_.p),
+                     drafter_ ? &taps : nullptr, rows);
+      if (drafter_) {
+        drafter_->note_tokens(ids.subspan(s, std::size_t(T)));  // the prompt's tokens join the drafter's shortlist
+        drafter_->commit(taps, int(s));
+      }
+    }
+    if (!encoded.empty()) CUDA_CHECK(cudaStreamSynchronize(stream));  // queued chunks read the rows freed here
+    tokens_in_state_.assign(ids.begin(), ids.end());
+    if (start < n) save_checkpoint();
+    stats.reused_tokens = int(start);
+  }
+
+  // Conversation parking. A parked conversation is a packed copy of a prompt checkpoint (target state |
+  // drafter checkpoint regions | last logits) plus the target's full-attention rows [0, n) of its n prompt
+  // tokens, in device memory within park_budget_ (least recently used evicted), and the drafter's context
+  // tokens of the checkpoint (its shortlist rows).
+  struct Parked {
+    std::vector<std::int32_t> ids, context;
+    DeviceBuffer data;
+    std::uint64_t used = 0;
+  };
+  static constexpr std::size_t kMinParked = 256;  // shorter prompts are cheaper to prefill than to keep
+
+  // the layout of a parked copy of n tokens: {offset, bytes} of each drafter region, logits, full rows
+  struct ParkLayout {
+    std::array<DraftModel::Region, 3> drafter{};
+    std::size_t drafter_off[3] = {}, logits = 0, rows = 0, bytes = 0;
+  };
+  ParkLayout park_layout(int n) const {
+    ParkLayout l;
+    std::size_t off = checkpoint_drafter_;
+    if (drafter_) {
+      l.drafter = drafter_->checkpoint_regions(n);
+      for (int i = 0; i < 3; ++i) l.drafter_off[i] = off, off += carved(l.drafter[i].bytes);
+    }
+    l.logits = off;
+    l.rows = off + carved(logits_.bytes);
+    l.bytes = l.rows + rt_.full_rows_bytes(n);
+    return l;
+  }
+
+  // the parked conversation whose prompt is the longest prefix of `ids`, if longer than `live` (and kMinParked)
+  Parked* find_parked(std::span<const std::int32_t> ids, std::size_t live) {
+    Parked* best = nullptr;
+    for (Parked& p : parked_)
+      if (p.ids.size() >= kMinParked && p.ids.size() > live && p.ids.size() <= ids.size() &&
+          (!best || p.ids.size() > best->ids.size()) && std::equal(p.ids.begin(), p.ids.end(), ids.begin()))
+        best = &p;
+    return best;
+  }
+
+  // The release hook (core/arena.h): a device allocation failed; drop every parked conversation so that it can
+  // be retried. Runs on the allocating thread, i.e. inside a request (the Generator allocates nothing else).
+  bool release_parked() {
+    if (parking_ || parked_.empty()) return false;
+    cudaStreamSynchronize(rt_.stream());  // copies from or into parked buffers may be queued
+    std::fprintf(stderr, "device memory low: released %zu parked conversation(s)\n", parked_.size());
+    parked_.clear();
+    return true;
+  }
+
+  // Parks the live conversation's checkpoint (the state after its last prompt; the full rows [0, n) are still
+  // in the caches) unless it is short, already parked or larger than the budget; the parked conversation with
+  // prompt `keep` (if given) stays. Never fails the request: a failed allocation disables parking.
+  void park_live(const std::vector<std::int32_t>* keep = nullptr) {
+    const std::size_t n = checkpoint_ids_.size();
+    if (park_budget_ == 0 || n < kMinParked) return;
+    for (Parked& p : parked_)
+      if (p.ids == checkpoint_ids_) {
+        p.used = ++clock_;
+        return;
+      }
+    auto kept = [&](const Parked& p) { return keep && p.ids == *keep; };
+    // a parked prefix of this conversation is superseded by it
+    std::erase_if(parked_, [&](const Parked& p) {
+      return !kept(p) && p.ids.size() < n && std::equal(p.ids.begin(), p.ids.end(), checkpoint_ids_.begin());
+    });
+    const ParkLayout l = park_layout(int(n));
+    std::size_t used = 0, kept_bytes = 0;
+    for (const Parked& p : parked_) used += p.data.bytes, kept_bytes += kept(p) ? p.data.bytes : 0;
+    if (kept_bytes + l.bytes > park_budget_) return;
+    while (used + l.bytes > park_budget_) {  // least recently used first
+      auto lru = parked_.end();
+      for (auto it = parked_.begin(); it != parked_.end(); ++it)
+        if (!kept(*it) && (lru == parked_.end() || it->used < lru->used)) lru = it;
+      used -= lru->data.bytes;
+      parked_.erase(lru);
+    }
+    Parked p;
+    try {
+      parking_ = true;  // a failure here must not release the parked conversations through the hook
+      p.data = DeviceBuffer(l.bytes);
+      parking_ = false;
+    } catch (const std::exception& e) {
+      parking_ = false;
+      std::fprintf(stderr, "conversation parking disabled: %s\n", e.what());
+      cudaGetLastError();  // the failed allocation is not a sticky error
+      park_budget_ = 0;
+      std::erase_if(parked_, [&](const Parked& q) { return !kept(q); });
+      return;
+    }
+    char* d = static_cast<char*>(p.data.p);
+    const char* c = static_cast<const char*>(checkpoint_->device_ptr());
+    const cudaStream_t s = rt_.stream();
+    CUDA_CHECK(cudaMemcpyAsync(d, c, checkpoint_drafter_, cudaMemcpyDefault, s));
+    for (int i = 0; i < 3 && drafter_; ++i)
+      CUDA_CHECK(cudaMemcpyAsync(d + l.drafter_off[i], c + checkpoint_drafter_ + l.drafter[i].offset,
+                                 l.drafter[i].bytes, cudaMemcpyDefault, s));
+    CUDA_CHECK(cudaMemcpyAsync(d + l.logits, c + checkpoint_logits_, logits_.bytes, cudaMemcpyDefault, s));
+    rt_.save_full_rows(d + l.rows, int(n));
+    p.ids = checkpoint_ids_;
+    if (drafter_) p.context = drafter_->checkpoint_context();
+    p.used = ++clock_;
+    parked_.push_back(std::move(p));
+  }
+
+  // Puts a parked conversation back as the prompt checkpoint (restore_checkpoint() then restores it) and its
+  // full rows into the caches. It stays parked.
+  void unpark(Parked& p) {
+    const int n = int(p.ids.size());
+    const ParkLayout l = park_layout(n);
+    const char* d = static_cast<const char*>(p.data.p);
+    char* c = static_cast<char*>(checkpoint_->device_ptr());
+    const cudaStream_t s = rt_.stream();
+    CUDA_CHECK(cudaMemcpyAsync(c, d, checkpoint_drafter_, cudaMemcpyDefault, s));
+    for (int i = 0; i < 3 && drafter_; ++i)
+      CUDA_CHECK(cudaMemcpyAsync(c + checkpoint_drafter_ + l.drafter[i].offset, d + l.drafter_off[i],
+                                 l.drafter[i].bytes, cudaMemcpyDefault, s));
+    CUDA_CHECK(cudaMemcpyAsync(c + checkpoint_logits_, d + l.logits, logits_.bytes, cudaMemcpyDefault, s));
+    rt_.restore_full_rows(d + l.rows, n);
+    if (drafter_) drafter_->adopt_checkpoint(c + checkpoint_drafter_, n, p.context);
+    checkpoint_ids_ = p.ids;
+    p.used = ++clock_;
+  }
+
+  // The checkpoint (on the device): target state (Runtime::save_checkpoint) | drafter context
+  // (Drafter::save_checkpoint) | logits of the last prompt token.
+  void save_checkpoint() {
+    char* p = static_cast<char*>(checkpoint_->device_ptr());
+    rt_.save_checkpoint(p);
+    if (drafter_) drafter_->save_checkpoint(p + checkpoint_drafter_);
+    CUDA_CHECK(cudaMemcpyAsync(p + checkpoint_logits_, logits_.p, logits_.bytes, cudaMemcpyDefault,
+                               rt_.stream()));
+    checkpoint_ids_ = tokens_in_state_;
+  }
+
+  void restore_checkpoint() {
+    const char* p = static_cast<const char*>(checkpoint_->device_ptr());
+    rt_.restore_checkpoint(p);
+    if (drafter_) drafter_->restore_checkpoint(p + checkpoint_drafter_);
+    CUDA_CHECK(cudaMemcpyAsync(logits_.p, p + checkpoint_logits_, logits_.bytes, cudaMemcpyDefault,
+                               rt_.stream()));
+    tokens_in_state_ = checkpoint_ids_;
+  }
+
+  static std::size_t carved(std::size_t bytes) { return (bytes + 255) / 256 * 256; }
+
+  // engine._sample with a host synchronisation (the speculative loop's first anchor): argmax at
+  // temperature <= 0, else one draw from engine._probs.
+  std::int32_t sample(const float* logits, const Sampling& sampling, head::SamplerRng& rng) {
+    head::SamplingParams p;
+    p.temperature = sampling.temperature;
+    p.top_k = sampling.top_k;
+    p.top_p = sampling.top_p;
+    head::sample(logits, 1, UNPADDED_VOCAB, UNPADDED_VOCAB, p, rng, static_cast<std::int32_t*>(token_.p),
+                 rt_.stream());
+    CUDA_CHECK(cudaMemcpyAsync(host_token_.data(), token_.p, sizeof(std::int32_t), cudaMemcpyDeviceToHost,
+                               rt_.stream()));
+    CUDA_CHECK(cudaStreamSynchronize(rt_.stream()));
+    return *static_cast<const std::int32_t*>(host_token_.data());
+  }
+
+  RuntimeOptions options_;
+  std::unique_ptr<Runtime> runtime_;
+  Runtime& rt_;
+  Prefiller prefiller_;
+  std::unique_ptr<DraftModel> drafter_;
+  std::unique_ptr<SpecLoop> spec_;
+  std::unique_ptr<VisionEncoder> vision_;  // image input (RuntimeOptions::vision), on the GPU
+  std::unique_ptr<VisionCpuEncoder> vision_cpu_;  // the same tower on the CPU (RuntimeOptions::vision_cpu)
+  DeviceBuffer chunk_tokens_, logits_, token_, taps_;
+  PinnedHostBuffer host_token_;
+  // prompt checkpoint (save_checkpoint) and the prompt it holds (empty: none)
+  std::unique_ptr<MappedHostBuffer> checkpoint_;
+  std::size_t checkpoint_drafter_ = 0, checkpoint_logits_ = 0;  // byte offsets in checkpoint_
+  std::vector<std::int32_t> checkpoint_ids_;
+  std::vector<std::int32_t> tokens_in_state_;
+  std::vector<Parked> parked_;
+  std::size_t park_budget_ = 0;  // bytes
+  std::uint64_t clock_ = 0;      // last use of a parked conversation
+  bool parking_ = false;         // park_live is allocating
+  int release_hook_ = -1;
+  std::mutex mutex_;
+};
+
+}  // namespace
+
+std::unique_ptr<Generator> make_generator(const RuntimeOptions& options) {
+  return std::make_unique<EngineGenerator>(options);
+}
+
+std::unique_ptr<Generator> make_generator(const RuntimeOptions& options, Weights weights, Ablation ablation) {
+  return std::make_unique<EngineGenerator>(options, std::move(weights), std::move(ablation));
+}
+
+}  // namespace ingine::model

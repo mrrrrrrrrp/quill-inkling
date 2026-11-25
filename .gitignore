@@ -1,0 +1,16 @@
+# build outputs
+engine/build*/
+installer/target/
+dist/
+__pycache__/
+*.pyc
+
+# models and installs placed inside a checkout
+models/*/
+inkling.toml
+bin/
+
+# benchmark runs (results worth keeping go in bench/rp_results.txt and bench/PLAN.md)
+bench/*.log
+bench/*.log.*
+bench/kld/*.bin

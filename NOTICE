@@ -1,0 +1,24 @@
+quill-inkling
+Copyright 2026 the quill-inkling contributors
+
+This repository contains quill (engine/), an inference engine for
+Inkling-2-Mini tuned for 12 GB RTX 40 GPUs; its Windows installer and
+launcher (installer/); the chat page (app/); and the benchmark scripts,
+replay sets and experiment log (bench/). It is licensed under the Apache
+License, Version 2.0 (LICENSE), except as noted below.
+
+quill is a fork of ingine by satellitedown, which adapts fngine
+(github.com/satellitedown/fngine), itself derived from Cinference and NInfer,
+all under the Apache License, Version 2.0. engine/NOTICE is ingine's notice,
+kept as required; it lists the vendored libraries in engine/third_party, which
+keep their own licenses (MIT, BSD-3-Clause, public domain).
+
+Not included, downloaded by the installer from their publishers:
+- thinkingmachines/Inkling-2-Mini (Apache-2.0)
+- incoai/Inkling-2-Mini-DFlash2 (Apache-2.0)
+- satellitedown/Inkling-2-Mini-abliterated-ingine (Apache-2.0)
+- cuBLAS from NVIDIA's CUDA redistributables (CUDA Toolkit license)
+
+data/wikitext2_test_head.txt is an excerpt of WikiText-2 (Merity et al.,
+2016, "Pointer Sentinel Mixture Models"), licensed under the Creative Commons
+Attribution-ShareAlike 3.0 license; it is used only for the quality check.

@@ -1,0 +1,157 @@
+fc624db 2026-11-25
+Fix: prefill head if/else (the FP4-tail launch had captured the else: with the tail off, prompts > 48 tokens ran the BF16 head on FP6 rows -> illegal address)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+05366de 2026-11-25
+4-bit head tail opt-in (QUILL_HEAD_TAIL4=1): the user prefers the KLD over ~1 tok/s
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+00cd18d 2026-11-25
+Split head: FP6 prefix (41,456 frequency-ordered rows) + FP4 tail (QUILL_HEAD_TAIL4=0: all FP6); KLD 0.00792, ~0-0.7 tok/s
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+19b7ac9 2026-11-25
+FP4 E2M1 drafter by default (+22 resident experts): teacher-forced 109.7 -> 111.2, sampled s7 120.6 -> 123.2, s11 118.2 -> 119.8; assist policies by token count (off: no gain)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+b3ac1dd 2026-11-25
+Tensor-core sliding-window attention over the q8 ring (int8 -> f16 by byte placement + HFMA2): per visit 12.1/12.8/14.7/16.5 us at M=1/2/4/8 (was 12.3/15.3/22.3/36.8); KLD 0.00706
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+d07f109 2026-11-25
+Tensor-core full attention over the q4 cache (mma.m16n8k16, f16 tiles dequantized per warp, all rows per block): 22k per visit 86-125 us for M=1-8 (was 108-604); long teacher-forced 82.5 -> 89.3 tok/s; KLD 0.00720
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+300120d 2026-11-25
+Full attention (q4 cache) with all rows per block, 128-key tiles staged by cp.async: 22k context teacher-forced 82.5 -> 84.2 tok/s; per-visit 173 -> 139 us (M=2), 604 -> 423 us (M=8)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+efe15b1 2026-11-24
+Decode: sliding attention all rows per block (staged q8 split, mantissa-trick int8, lazy rescale), L2 prefetch of the next visit's weights while the join waits (gated), GPU assist off; KLD 0.00755
+
+Diagnostics: attention phase timers (QUILL_ATTN_DBG), join wait timers (QUILL_JOIN_DBG), --profile-steps,
+draft confidences in the forced trace.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+169f1a8 2026-11-24
+Frequency-ordered FP6 head rows: draft head reads 41,456 rows (specials + corpus shortlist), target logits scatter back (KLD identical); +2.7% (3 seeds)
+
+Also (off by default): pre-gating L3 prefetch for the CPU tier (QUILL_PREFETCH), FP4 E2M1 dense rows
+(fp4.cuh, QUILL_DRAFT_FP4), low-bit simulation hooks (QUILL_DRAFT_SIM, QUILL_HEAD_SIM_FROM).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+f4b59a4 2026-11-24
+Prefill staging: one kernel sets the staged experts' factors instead of two 4-byte copies per expert (32k 2192 -> 2211 tok/s)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+020fca8 2026-11-24
+Sliding-window rings as int8 rows with fp16 scale per 32 (default; QUILL_RING_Q8=0: BF16): KLD 0.00778, +15 resident experts
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+9e78354 2026-11-24
+Staging slots join the lent range: resident experts during decode, emptied for a Prefiller prompt (-2.3% round time)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+f66e9b3 2026-11-24
+Decode attention grid (rows, head groups, splits): +0.7% at 22k, same arithmetic
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+03c393c 2026-11-24
+Revert attention split geometry to 64 x 256-key chunks (128 splits measured neutral)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+c2adaa8 2026-11-24
+Decode attention: verify rows fastest in the split grid (L2 reuse of the KV chunk, +4.2% at 22k context); split geometry 128 x 128-key chunks (QUILL_ATTN_SPLITS=64: old)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+d2ad680 2026-11-24
+cuBLASLt workspace and drafter prefill taps inside the lent prefill scratch
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+c3c4d82 2026-11-24
+Sliding-window q4 rings (QUILL_RING_Q4, off: KLD 0.0114 over the bar)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+b5448de 2026-11-24
+Step prefill threshold 48 tokens (measured crossover), prefill-swap knob, gap analysis
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+fa05ebb 2026-11-24
+GPU zero-copy assist of CPU-tier misses (34% of unique misses, min 3, default), step-graph prefill for short tails (<= 64 tokens), dynamic work split in the CPU tier, vram_check re-entrancy guard
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+80ca83a 2026-11-24
+Dynamic VRAM: shared region in re-mappable 32 MiB chunks (CUDA VMM); releases chunks above the KV front when all-process VRAM nears the cap, takes them back when it falls; startup reserve 160 MiB
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+f64686a 2026-11-24
+FP6 drafter matrices (default), per-format split guards in launch_gemv
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+5bef6a7 2026-11-24
+FP6 E2M3 dense rows (proj, wo, head; default with dense_fp8): GEMV + tensor-core kernels via the E4M3 decode trick, prefill dequant; draft temperature and draft vocab-prefix experiments; CPU tier phase timers
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+32de498 2026-11-24
+CPU tier: int8 dot products (pshufb E2M1 -> int8, maddubs/madd), 1.8x per-core; 256 B stack limit; VRAM phase accounting
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+51af86e 2026-11-24
+Exact two-stage drafter top-16, configurable verify widths, replay recorder, CPU tier unique-expert stats, NVFP4 dense round-trip experiment (off)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+0e92f72 2026-11-24
+Lend prefill scratch to expert slots, prompt checkpoint in pinned host memory, VRAM breakdown, optional lossy cold-expert skip (off), bench greedy restore check
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+4a13c63 2026-11-24
+NVML-based VRAM sizing, host-resident embedding and codebooks, prefill upload overlap, server timings + chat page route
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+d4ebcf2 2026-11-24
+DFlash2 drafter (DraftModel interface), GEMV K=4096/6912, NumPy reference + dump, fixes
+
+e8545d1 2026-11-24
+Shared KV/expert region: position-major q4 KV + slot records with KV-front eviction; serve flags
+
+790b6aa 2026-11-24
+Templated CPU kernels, MXFP8->NVFP4 option, quill-kld accuracy tool, routing counts, adaptive expert residency (~70 tok/s)
+
+d71b1a5 2026-11-24
+Hybrid MoE: pinned host experts + GPU slot pools + AVX2 CPU tier (mapped doorbell), q4 KV prefill/decode, staged prefill experts; first coherent run 19.4 tok/s
+
+388d974 2026-11-24
+ignore build outputs
+
+fc3f86e 2026-11-24
+Port to Windows/MSVC + sm_89: platform layer, PDL off, E2M1/E4M3 decode, sm89 router/gates, new decode attention with q4 KV
+
+bb18c1e 2026-11-24
+import ingine native @556acc7c (Apache-2.0) as quill base
+

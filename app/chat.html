@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inkling chat</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --panel2: #1c212a; --line: #262c37; --text: #e6e8ec; --muted: #8b93a3;
+    --accent: #7aa2f7; --accent2: #9ece6a; --warn: #e0af68; --bad: #f7768e; --user: #233047;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, "Segoe UI", sans-serif;
+         display: grid; grid-template-columns: 1fr 330px; }
+  main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+  #log { flex: 1; overflow-y: auto; padding: 24px 0 12px; }
+  .msg { max-width: 860px; margin: 0 auto 18px; padding: 0 24px; }
+  .bubble { padding: 12px 16px; border-radius: 12px; overflow-wrap: anywhere; }
+  .user .bubble { background: var(--user); margin-left: 15%; white-space: pre-wrap; }
+  .assistant .bubble { background: transparent; padding-left: 0; padding-right: 0; }
+  .role { font-size: 12px; color: var(--muted); margin-bottom: 4px; letter-spacing: .02em; }
+  .user .role { text-align: right; }
+  .bubble p { margin: 0 0 .7em; } .bubble p:last-child { margin-bottom: 0; }
+  .bubble h3, .bubble h4, .bubble h5, .bubble h6 { margin: .9em 0 .4em; }
+  .bubble ul, .bubble ol { margin: .3em 0 .8em; padding-left: 1.4em; }
+  .bubble code { font-family: var(--mono); font-size: 13px; background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  .bubble pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+                overflow-x: auto; margin: .6em 0; }
+  .bubble pre code { background: none; padding: 0; white-space: pre; }
+  .bubble pre .lang { font: 11px var(--mono); color: var(--muted); margin-bottom: 4px; }
+  .bubble hr { border: 0; border-top: 1px solid var(--line); }
+  details.think { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin-bottom: 10px; }
+  details.think summary { cursor: pointer; padding: 7px 12px; color: var(--muted); font-size: 13px; user-select: none; }
+  details.think .tbody { padding: 0 14px 12px; color: #aab1bf; font-size: 13.5px; white-space: pre-wrap;
+                         max-height: 360px; overflow-y: auto; }
+  .meta { font: 12px var(--mono); color: var(--muted); margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .cursor::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .err { color: var(--bad); font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; margin-top: 18vh; }
+  .empty h1 { font-weight: 600; color: var(--text); font-size: 22px; margin-bottom: 6px; }
+
+  form { border-top: 1px solid var(--line); padding: 14px 24px 18px; background: var(--bg); }
+  .composer { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+             border-radius: 10px; padding: 11px 13px; font: inherit; min-height: 46px; max-height: 260px; outline: none; }
+  textarea:focus { border-color: #3a4558; }
+  button { background: var(--accent); color: #0b0e14; border: 0; border-radius: 9px; padding: 0 16px; height: 46px;
+           font: 600 14px system-ui, sans-serif; cursor: pointer; }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--line); height: 34px; font-weight: 500; }
+  button.stop { background: var(--bad); }
+  button:disabled { opacity: .45; cursor: default; }
+  .hint { max-width: 860px; margin: 6px auto 0; font-size: 12px; color: var(--muted); }
+
+  aside { background: var(--panel); border-left: 1px solid var(--line); height: 100vh; overflow-y: auto; padding: 18px 18px 30px; }
+  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 22px 0 10px; font-weight: 600; }
+  aside h2:first-child { margin-top: 0; }
+  .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 3px 0; }
+  .row span:first-child { color: var(--muted); }
+  .row span:last-child { font-family: var(--mono); font-size: 13px; text-align: right; }
+  .big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font: 600 21px var(--mono); }
+  .tile .u { font-size: 11px; color: var(--muted); }
+  .tile .k { font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+  .bar { height: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 6px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .bar.vram > div { background: var(--accent2); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .dot.ok { background: var(--accent2); } .dot.busy { background: var(--warn); } .dot.down { background: var(--bad); }
+  label.f { display: block; font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+  select, input[type=number], aside textarea { width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 13.5px system-ui, sans-serif; }
+  aside textarea { min-height: 70px; resize: vertical; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .phase { font-size: 12.5px; color: var(--warn); min-height: 18px; }
+  .attach { max-width: 860px; margin: 0 auto 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .attach div { position: relative; }
+  .attach img { height: 64px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .attach button { position: absolute; top: 2px; right: 2px; height: 22px; padding: 0 7px; }
+  .bubble img { display: block; max-width: 320px; max-height: 240px; border-radius: 8px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="log"></div>
+  <form id="form">
+    <div class="attach" id="attach"></div>
+    <div class="composer">
+      <input id="file" type="file" accept="image/*" multiple hidden>
+      <button class="secondary" id="pick" type="button" title="Attach images (resized to 1024 px)">+ Image</button>
+      <textarea id="input" rows="1" placeholder="Message Inkling…" autofocus></textarea>
+      <button id="send" type="submit">Send</button>
+    </div>
+    <div class="hint">Enter to send · Shift+Enter for a new line · Ctrl+V, drop or + Image to attach images · the conversation is kept in this browser</div>
+  </form>
+</main>
+
+<aside>
+  <h2>Server</h2>
+  <div class="row"><span><span id="sdot" class="dot"></span><span id="sstate">connecting…</span></span><span id="model">–</span></div>
+  <div class="row"><span>VRAM (all apps)</span><span id="vram">–</span></div>
+  <div class="bar vram"><div id="vrambar"></div></div>
+
+  <h2>Context</h2>
+  <div class="row"><span>Used</span><span id="ctx">0 / –</span></div>
+  <div class="bar"><div id="ctxbar"></div></div>
+  <div class="row"><span>Messages</span><span id="nmsg">0</span></div>
+
+  <h2>Last reply</h2>
+  <div class="phase" id="phase"></div>
+  <div class="big">
+    <div class="tile"><div class="k">Decode</div><div class="v" id="t-dec">–</div><div class="u">tok/s</div></div>
+    <div class="tile"><div class="k">Prefill</div><div class="v" id="t-pre">–</div><div class="u" id="t-pre-u">tok/s</div></div>
+  </div>
+  <div class="row" style="margin-top:8px"><span>Time to first token</span><span id="r-ttft">–</span></div>
+  <div class="row"><span>Prompt prefilled</span><span id="r-pf">–</span></div>
+  <div class="row"><span>Reused from last turn</span><span id="r-reuse">–</span></div>
+  <div class="row"><span>Generated</span><span id="r-gen">–</span></div>
+  <div class="row"><span>· reasoning / answer</span><span id="r-split">–</span></div>
+  <div class="row"><span>Decode time</span><span id="r-dt">–</span></div>
+  <div class="row"><span>Spec: tokens per verify</span><span id="r-tpv">–</span></div>
+  <div class="row"><span>Spec: drafts accepted</span><span id="r-acc">–</span></div>
+
+  <h2>Session</h2>
+  <div class="row"><span>Replies</span><span id="s-n">0</span></div>
+  <div class="row"><span>Tokens generated</span><span id="s-tok">0</span></div>
+  <div class="row"><span>Average decode</span><span id="s-dec">–</span></div>
+
+  <h2>Settings</h2>
+  <label class="f" for="effort">Reasoning effort</label>
+  <select id="effort">
+    <option value="">model default</option>
+    <option>none</option><option>minimal</option><option>low</option><option>medium</option>
+    <option>high</option><option>xhigh</option><option>max</option>
+  </select>
+  <div class="two">
+    <div><label class="f" for="temp">Temperature</label><input id="temp" type="number" min="0" max="2" step="0.05" placeholder="default"></div>
+    <div><label class="f" for="maxtok">Max tokens</label><input id="maxtok" type="number" min="1" step="256" value="8192"></div>
+  </div>
+  <label class="f" for="system">System prompt</label>
+  <textarea id="system" placeholder="optional"></textarea>
+  <div style="display:flex; gap:8px; margin-top:14px">
+    <button class="secondary" id="newchat" type="button">New chat</button>
+    <button class="secondary" id="export" type="button">Export</button>
+  </div>
+</aside>
+
+<script>
+"use strict";
+const VRAM_CAP_MIB = 11571;          // the 11.3 GiB Task Manager cap the engine sizes itself to
+const STORE = "inkling-chat-v1";
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) => (n == null || !isFinite(n)) ? "–" : Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+
+let state = load();
+let maxCtx = null, busy = false, controller = null;
+let attachments = [];  // image data URLs waiting for the next message
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (s && Array.isArray(s.messages)) return s;
+  } catch (e) {}
+  return { messages: [], settings: {}, session: { n: 0, tokens: 0, decodeMs: 0 } };
+}
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(state));
+  } catch (e) {
+    // the browser's storage is full of pictures: keep the text and drop the images of stored messages
+    for (const m of state.messages) if (m.images) delete m.images;
+    localStorage.setItem(STORE, JSON.stringify(state));
+  }
+}
+
+// ---------- markdown (small, escapes everything first) ----------
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function inline(s) {
+  return s.split(/(`[^`\n]+`)/).map((part, i) => {
+    if (i % 2) return "<code>" + esc(part.slice(1, -1)) + "</code>";
+    return esc(part).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<em>$2</em>");
+  }).join("");
+}
+function blocks(t) {
+  let html = "", list = null, para = [];
+  const flush = () => { if (para.length) { html += "<p>" + para.map(inline).join("<br>") + "</p>"; para = []; } };
+  const endList = () => { if (list) { html += "</" + list + ">"; list = null; } };
+  for (const raw of t.split("\n")) {
+    const l = raw.replace(/\s+$/, "");
+    let m;
+    if (!l.trim()) { flush(); endList(); continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { flush(); endList(); const n = Math.min(m[1].length + 2, 6); html += `<h${n}>${inline(m[2])}</h${n}>`; continue; }
+    if ((m = l.match(/^\s*[-*•]\s+(.*)$/))) { flush(); if (list !== "ul") { endList(); html += "<ul>"; list = "ul"; } html += "<li>" + inline(m[1]) + "</li>"; continue; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { flush(); if (list !== "ol") { endList(); html += "<ol>"; list = "ol"; } html += "<li>" + inline(m[1]) + "</li>"; continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { flush(); endList(); html += "<hr>"; continue; }
+    endList(); para.push(l);
+  }
+  flush(); endList();
+  return html;
+}
+function md(src) {
+  return src.split("```").map((p, i) => {
+    if (i % 2 === 0) return blocks(p);
+    const nl = p.indexOf("\n");
+    const lang = nl >= 0 ? p.slice(0, nl).trim() : "";
+    const code = (nl >= 0 ? p.slice(nl + 1) : p).replace(/\n$/, "");
+    return `<pre>${lang ? `<div class="lang">${esc(lang)}</div>` : ""}<code>${esc(code)}</code></pre>`;
+  }).join("");
+}
+
+// ---------- rendering ----------
+function metaLine(t) {
+  if (!t) return "";
+  const parts = [];
+  parts.push(`<span><b>${fmt(t.decode_tok_s, 1)}</b> tok/s</span>`);
+  parts.push(`<span>${fmt(t.generated_tokens)} tok</span>`);
+  if (t.ttft_ms != null) parts.push(`<span>TTFT ${fmt(t.ttft_ms / 1000, 2)} s</span>`);
+  parts.push(`<span>prefill ${fmt(t.prefill_tokens)} tok @ ${fmt(t.prefill_tok_s)} tok/s</span>`);
+  if (t.spec_rounds) parts.push(`<span>${fmt(t.tokens_per_verify, 2)} tok/verify</span>`);
+  return parts.join("");
+}
+function renderMessage(m, live = false) {
+  const div = document.createElement("div");
+  div.className = "msg " + m.role;
+  if (m.role === "user") {
+    div.innerHTML = `<div class="role">You</div><div class="bubble"></div>`;
+    const bubble = div.querySelector(".bubble");
+    for (const url of m.images || []) {
+      const img = document.createElement("img");
+      img.src = url;
+      bubble.appendChild(img);
+    }
+    bubble.appendChild(document.createTextNode(m.content));
+    return div;
+  }
+  div.innerHTML = `<div class="role">Inkling</div>
+    <details class="think" ${m.reasoning ? "" : "hidden"}><summary></summary><div class="tbody"></div></details>
+    <div class="bubble"></div><div class="meta"></div><div class="err"></div>`;
+  fillAssistant(div, m, live);
+  return div;
+}
+function fillAssistant(div, m, live) {
+  const det = div.querySelector("details");
+  if (m.reasoning) {
+    det.hidden = false;
+    det.querySelector(".tbody").textContent = m.reasoning;
+    const secs = m.thinkMs != null ? ` · ${fmt(m.thinkMs / 1000, 1)} s` : "";
+    det.querySelector("summary").textContent = (live && !m.content ? "Thinking…" : "Reasoning") + secs;
+    if (live && !m.content) { det.open = true; const tb = det.querySelector(".tbody"); tb.scrollTop = tb.scrollHeight; }
+  }
+  const b = div.querySelector(".bubble");
+  b.innerHTML = md(m.content || "");
+  b.classList.toggle("cursor", live);
+  div.querySelector(".meta").innerHTML = metaLine(m.timings);
+  div.querySelector(".err").textContent = m.error || "";
+}
+function renderAll() {
+  const log = $("log");
+  log.innerHTML = "";
+  if (!state.messages.length) {
+    log.innerHTML = `<div class="empty"><h1>Inkling 2 Mini</h1>abliterated · DFlash2 speculative decoding · 600k context · images on the CPU</div>`;
+  }
+  for (const m of state.messages) log.appendChild(renderMessage(m));
+  log.scrollTop = log.scrollHeight;
+  updateContext();
+  updateSession();
+  const last = [...state.messages].reverse().find((m) => m.role === "assistant" && m.timings);
+  showTimings(last ? last.timings : null, last);
+}
+function updateContext() {
+  const last = [...state.messages].reverse().find((m) => m.role === "assistant" && m.usage);
+  const used = last ? last.usage.prompt_tokens + last.usage.completion_tokens : 0;
+  $("ctx").textContent = `${fmt(used)} / ${maxCtx ? fmt(maxCtx) : "–"}`;
+  $("ctxbar").style.width = maxCtx ? Math.min(100, 100 * used / maxCtx) + "%" : "0";
+  $("nmsg").textContent = state.messages.length;
+}
+function updateSession() {
+  const s = state.session;
+  $("s-n").textContent = fmt(s.n);
+  $("s-tok").textContent = fmt(s.tokens);
+  $("s-dec").textContent = s.decodeMs > 0 ? fmt(s.tokens / (s.decodeMs / 1000), 1) + " tok/s" : "–";
+}
+function showTimings(t, m) {
+  $("t-dec").textContent = t ? fmt(t.decode_tok_s, 1) : "–";
+  // a short new tail (the cached conversation is reused) runs through decode steps: its rate is latency, not
+  // throughput, so show the time it took; batched prefill (64+ tokens) shows tok/s
+  const shortPre = t && t.prefill_tokens > 0 && t.prefill_tokens < 64;
+  $("t-pre").textContent = !t || !(t.prefill_tokens > 0) ? "–" : shortPre ? fmt(t.prefill_ms / 1000, 2) : fmt(t.prefill_tok_s);
+  $("t-pre-u").textContent = shortPre ? `s · ${fmt(t.prefill_tokens)} new tok` : "tok/s";
+  $("r-ttft").textContent = t && t.ttft_ms != null ? fmt(t.ttft_ms / 1000, 2) + " s" : "–";
+  $("r-pf").textContent = t ? `${fmt(t.prefill_tokens)} tok · ${fmt(t.prefill_ms / 1000, 2)} s` : "–";
+  $("r-reuse").textContent = t ? fmt(t.reused_tokens) + " tok" : "–";
+  $("r-gen").textContent = t ? fmt(t.generated_tokens) + " tok" : "–";
+  $("r-split").textContent = m && m.usage ? `${fmt(m.reasoningChars ? Math.round(m.usage.completion_tokens * m.reasoningChars / Math.max(1, m.reasoningChars + (m.content || "").length)) : 0)} / ${fmt(m.reasoningChars ? Math.round(m.usage.completion_tokens * (m.content || "").length / Math.max(1, m.reasoningChars + (m.content || "").length)) : m.usage.completion_tokens)} ≈` : "–";
+  $("r-dt").textContent = t ? fmt(t.decode_ms / 1000, 2) + " s" : "–";
+  $("r-tpv").textContent = t && t.spec_rounds ? fmt(t.tokens_per_verify, 2) : (t ? "off" : "–");
+  $("r-acc").textContent = t && t.spec_rounds ? `${fmt(t.spec_accepted)} in ${fmt(t.spec_rounds)} rounds` : "–";
+}
+
+// ---------- server status ----------
+async function poll() {
+  try {
+    const r = await fetch("/health", { cache: "no-store" });
+    const h = await r.json();
+    maxCtx = h.max_model_len || maxCtx;
+    $("model").textContent = h.model || "–";
+    const running = h.running || h.waiting > 0;
+    $("sdot").className = "dot " + (running ? "busy" : "ok");
+    $("sstate").textContent = running ? (h.waiting ? `busy (${h.waiting} queued)` : "generating") : "ready";
+    if (h.vram_used_mib != null) {
+      $("vram").textContent = `${fmt(h.vram_used_mib / 1024, 2)} / ${fmt(VRAM_CAP_MIB / 1024, 1)} GB`;
+      $("vrambar").style.width = Math.min(100, 100 * h.vram_used_mib / VRAM_CAP_MIB) + "%";
+    }
+    updateContext();
+  } catch (e) {
+    $("sdot").className = "dot down";
+    $("sstate").textContent = "server not reachable";
+  }
+}
+setInterval(poll, 2000);
+
+// ---------- chat ----------
+function settings() {
+  return { effort: $("effort").value, temp: $("temp").value, maxtok: $("maxtok").value, system: $("system").value };
+}
+function applySettings(s) {
+  if (!s) return;
+  $("effort").value = s.effort || ""; $("temp").value = s.temp || ""; $("maxtok").value = s.maxtok || 8192; $("system").value = s.system || "";
+}
+for (const id of ["effort", "temp", "maxtok", "system"]) $(id).addEventListener("change", () => { state.settings = settings(); save(); });
+
+function setBusy(b) {
+  busy = b;
+  const btn = $("send");
+  btn.textContent = b ? "Stop" : "Send";
+  btn.classList.toggle("stop", b);
+}
+
+async function send(text) {
+  const s = settings();
+  const images = attachments.splice(0);
+  renderPending();
+  state.messages.push(images.length ? { role: "user", content: text, images } : { role: "user", content: text });
+  const m = { role: "assistant", content: "", reasoning: "", reasoningChars: 0 };
+  state.messages.push(m);
+  save();
+  renderAll();
+  const log = $("log");
+  const div = log.lastElementChild;
+  fillAssistant(div, m, true);
+
+  const msgs = [];
+  if (s.system.trim()) msgs.push({ role: "system", content: s.system });
+  for (const x of state.messages.slice(0, -1)) msgs.push(wire(x));
+  const body = { messages: msgs, stream: true, stream_options: { include_usage: true } };
+  if (s.effort) body.reasoning_effort = s.effort;
+  if (s.temp !== "") body.temperature = Number(s.temp);
+  if (s.maxtok) body.max_tokens = Number(s.maxtok);
+
+  controller = new AbortController();
+  setBusy(true);
+  const t0 = performance.now();
+  let tFirst = null, tAnswer = null, chars = 0, pending = false;
+  const phase = $("phase");
+  const tick = setInterval(() => {
+    const el = (performance.now() - t0) / 1000;
+    if (tFirst == null) phase.textContent = `prefill… ${fmt(el, 1)} s`;
+    else {
+      const rate = chars / 3.8 / Math.max(0.05, (performance.now() - tFirst) / 1000);
+      phase.textContent = `${m.content ? "answering" : "thinking"}… ${fmt(el, 1)} s · ≈${fmt(rate)} tok/s live`;
+    }
+  }, 200);
+  const redraw = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+      fillAssistant(div, m, true);
+      if (atBottom) log.scrollTop = log.scrollHeight;
+    });
+  };
+
+  try {
+    const r = await fetch("/v1/chat/completions", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); msg += ": " + (j.error && j.error.message || JSON.stringify(j)); } catch (e) {}
+      throw new Error(msg);
+    }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const ev = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        for (const line of ev.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") continue;
+          let j;
+          try { j = JSON.parse(data); } catch (e) { continue; }
+          if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+          if (j.usage) { m.usage = j.usage; if (j.usage.timings) m.timings = j.usage.timings; }
+          const d = j.choices && j.choices[0] && j.choices[0].delta;
+          if (!d) continue;
+          const rc = d.reasoning_content || d.reasoning || "";
+          if (rc) { if (tFirst == null) tFirst = performance.now(); m.reasoning += rc; m.reasoningChars += rc.length; chars += rc.length; }
+          if (d.content) {
+            if (tFirst == null) tFirst = performance.now();
+            if (tAnswer == null) { tAnswer = performance.now(); if (m.reasoning) m.thinkMs = tAnswer - tFirst; }
+            m.content += d.content; chars += d.content.length;
+          }
+          if (rc || d.content) redraw();
+        }
+      }
+    }
+  } catch (e) {
+    m.error = e.name === "AbortError" ? "stopped" : String(e.message || e);
+  } finally {
+    clearInterval(tick);
+    phase.textContent = "";
+    controller = null;
+    setBusy(false);
+    if (m.reasoning && m.thinkMs == null && tFirst != null) m.thinkMs = performance.now() - tFirst;
+    if (m.timings) {
+      state.session.n += 1;
+      state.session.tokens += m.timings.generated_tokens || 0;
+      state.session.decodeMs += m.timings.decode_ms || 0;
+    }
+    save();
+    fillAssistant(div, m, false);
+    const det = div.querySelector("details");
+    if (m.content) det.open = false;
+    updateContext(); updateSession(); showTimings(m.timings, m);
+    poll();
+  }
+}
+
+// ---------- images: resized in the browser (1024 px on the long side), sent as JPEG data URLs ----------
+const IMAGE_SIDE = 1024;
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, IMAGE_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.naturalWidth * k));
+      c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";  // transparent pixels become white, not black
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.9));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`not an image: ${file.name}`)); };
+    img.src = url;
+  });
+}
+function renderPending() {
+  const box = $("attach");
+  box.innerHTML = "";
+  attachments.forEach((url, i) => {
+    const wrap = document.createElement("div");
+    const img = document.createElement("img");
+    img.src = url;
+    const x = document.createElement("button");
+    x.className = "secondary"; x.type = "button"; x.textContent = "×";
+    x.addEventListener("click", () => { attachments.splice(i, 1); renderPending(); });
+    wrap.append(img, x);
+    box.appendChild(wrap);
+  });
+}
+// a stored message as sent: its text, and its images as image_url parts when it has any
+function wire(x) {
+  if (!x.images || !x.images.length) return { role: x.role, content: x.content };
+  const parts = x.images.map((url) => ({ type: "image_url", image_url: { url } }));
+  if (x.content) parts.unshift({ type: "text", text: x.content });
+  return { role: x.role, content: parts };
+}
+async function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    try { attachments.push(await readImage(f)); } catch (err) { $("phase").textContent = String(err.message || err); }
+  }
+  renderPending();
+}
+$("pick").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  await addFiles(files);
+});
+// Ctrl+V: images on the clipboard become attachments; text pastes as usual
+document.addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData ? e.clipboardData.items : [])]
+    .filter((it) => it.kind === "file" && it.type.startsWith("image/")).map((it) => it.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  addFiles(files);
+});
+// drag and drop anywhere on the page
+document.addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
+document.addEventListener("drop", (e) => {
+  if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  addFiles([...e.dataTransfer.files]);
+});
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (busy) { if (controller) controller.abort(); return; }
+  const text = $("input").value.trim();
+  if (!text && !attachments.length) return;
+  $("input").value = "";
+  autosize();
+  send(text);
+});
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); }
+});
+function autosize() { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(260, t.scrollHeight) + "px"; }
+$("input").addEventListener("input", autosize);
+$("newchat").addEventListener("click", () => {
+  if (busy && controller) controller.abort();
+  state.messages = [];
+  save(); renderAll();
+});
+$("export").addEventListener("click", () => {
+  const text = state.messages.map((m) => (m.role === "user" ? "## You\n\n" : "## Inkling\n\n") +
+    (m.reasoning ? "<details><summary>Reasoning</summary>\n\n" + m.reasoning + "\n\n</details>\n\n" : "") + m.content).join("\n\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+  a.download = "inkling-chat.md";
+  a.click();
+});
+
+applySettings(state.settings);
+renderAll();
+poll();
+</script>
+</body>
+</html>

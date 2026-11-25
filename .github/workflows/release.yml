@@ -1,0 +1,68 @@
+# Builds a release on a version tag (v0.1.0 = installer/Cargo.toml's version): the engine for RTX 40 + RTX 50, the
+# installer with this repository's name baked in, then dist\ (Inkling-Setup.exe, engine zip, SHA256SUMS.txt)
+# attached to the GitHub release. Run it by hand (workflow_dispatch) to get dist\ as an artifact without releasing.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the installer version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path installer\Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("${{ github.ref_name }}" -ne "v$ver") { throw "tag ${{ github.ref_name }} != installer version v$ver" }
+
+      - name: CUDA 13.3.1 (NVIDIA redistributables, no installer)
+        shell: pwsh
+        run: |
+          .\tools\fetch-cuda.ps1 -Dest "$env:RUNNER_TEMP\cuda"
+          "CUDA_PATH=$env:RUNNER_TEMP\cuda" >> $env:GITHUB_ENV
+          "CUDACXX=$env:RUNNER_TEMP\cuda\bin\nvcc.exe" >> $env:GITHUB_ENV
+
+      - name: Engine (sm_89 + sm_120a)
+        shell: pwsh
+        run: |
+          $env:QUILL_CUDA_ARCH = "89;120a"
+          cmd /c engine\build.cmd '""' build-release
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Installer
+        shell: pwsh
+        env:
+          INKLING_REPO: ${{ github.repository }}
+        run: |
+          cargo test --release --manifest-path installer\Cargo.toml
+          cargo build --release --manifest-path installer\Cargo.toml
+
+      - name: Package
+        shell: pwsh
+        run: .\tools\package-release.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) { gh release create $tag --title "Inkling $tag" --notes-file .github/release-notes.md }
+          gh release upload $tag (Get-ChildItem dist -File).FullName --clobber

@@ -1,0 +1,150 @@
+s_ctrl1          | resident 1735 | TOTAL 9204 tok 96.0 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_thr5           | resident 1735 | TOTAL 9204 tok 87.9 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_thr4           | resident 1735 | TOTAL 9204 tok 82.0 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_swaps64        | resident 1735 | TOTAL 9204 tok 93.9 tok/s 2.28 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_int8           | resident 1735 | TOTAL 9204 tok 96.0 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_decay90        | resident 1735 | TOTAL 9204 tok 97.5 tok/s 2.36 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_margin11       | resident 1735 | TOTAL 9204 tok 95.9 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+s_ctrl2          | resident 1735 | TOTAL 9204 tok 95.9 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_fp6            | resident 1789 | TOTAL 9204 tok 104.3 tok/s 2.34 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_thr8           | resident 1735 | TOTAL 9204 tok 91.8 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_thr10          | resident 1735 | TOTAL 9204 tok 95.7 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_thr14          | resident 1735 | TOTAL 9204 tok 95.8 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_ts080          | resident 1735 | TOTAL 9204 tok 97.0 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_ts125          | resident 1735 | TOTAL 9204 tok 95.5 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+f_ctrl           | resident 1735 | TOTAL 9204 tok 96.0 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+v_base_fp6       | resident 1789 | TOTAL 9204 tok 104.7 tok/s 2.34 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+v_voc100k        | resident 1789 | TOTAL 9204 tok 69.2 tok/s 1.63 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+v_voc64k         | resident 1789 | TOTAL 9204 tok 67.3 tok/s 1.58 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+v_voc32k         | resident 1789 | TOTAL 9204 tok 66.5 tok/s 1.53 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+d_fp6            | resident 1808 | TOTAL 9204 tok 104.5 tok/s 2.25 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+d_base_s11       | resident 1789 | TOTAL 9204 tok 101.3 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+d_fp6_s11        | resident 1808 | TOTAL 9204 tok 103.3 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+d_base_s23       | resident 1789 | TOTAL 9204 tok 102.2 tok/s 2.32 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+d_fp6_s23        | resident 1808 | TOTAL 9204 tok 102.4 tok/s 2.32 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+cap11.3_s7       | resident 1808 | TOTAL 9204 tok 104.1 tok/s 2.25 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+cap11.1_s7       | resident 1761 | TOTAL 9204 tok 102.6 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 10600 MiB (cap 11650 MiB), exit 0
+cap10.9_s7       | resident 1713 | TOTAL 9204 tok 99.6 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 10394 MiB (cap 11650 MiB), exit 0
+cap11.3_s11      | resident 1808 | TOTAL 9204 tok 103.3 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 10804 MiB (cap 11650 MiB), exit 0
+cap11.1_s11      | resident 1761 | TOTAL 9204 tok 101.1 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 10600 MiB (cap 11650 MiB), exit 0
+cap10.9_s11      | resident 1713 | TOTAL 9204 tok 98.3 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 10394 MiB (cap 11650 MiB), exit 0
+dyn1             | resident 1893 | TOTAL 9204 tok 107.3 tok/s 2.32 tok/verify | WATCHDOG: peak device memory 11142 MiB (cap 11650 MiB), exit 0
+dyn_s11          | resident 1893 | TOTAL 9204 tok 104.9 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11142 MiB (cap 11650 MiB), exit 0
+dyn_s23          | resident 1893 | TOTAL 9204 tok 108.6 tok/s 2.38 tok/verify | WATCHDOG: peak device memory 11142 MiB (cap 11650 MiB), exit 0
+dyn_stress       | resident 1848 | NO RESULT | WATCHDOG: peak device memory 11134 MiB (cap 11650 MiB), exit -1073741571
+dyn_stress2      | resident 1856 | NO RESULT | WATCHDOG: device memory 11653 MiB > cap 11650 MiB, killing
+dyn_stress3      | resident 1863 | TOTAL 4602 tok 100.0 tok/s 2.51 tok/verify | WATCHDOG: peak device memory 11585 MiB (cap 12000 MiB), exit 0
+dyn_stress4      | resident 1863 | TOTAL 6136 tok 102.8 tok/s 2.39 tok/verify | WATCHDOG: peak device memory 11591 MiB (cap 12000 MiB), exit 0
+as_ctrl          | resident 1908 | TOTAL 9204 tok 107.9 tok/s 2.38 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_34m2          | resident 1908 | TOTAL 9204 tok 108.3 tok/s 2.34 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_50m2          | resident 1908 | TOTAL 9204 tok 100.4 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_34m3          | resident 1908 | TOTAL 9204 tok 112.0 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_ctrl_s11      | resident 1908 | TOTAL 9204 tok 110.1 tok/s 2.48 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_34m3_s11      | resident 1908 | TOTAL 9204 tok 112.1 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_ctrl_s23      | resident 1908 | TOTAL 9204 tok 107.5 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_34m3_s23      | resident 1908 | TOTAL 9204 tok 111.3 tok/s 2.38 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as_25m3          | resident 1908 | TOTAL 9204 tok 110.6 tok/s 2.40 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+ws_dynamic       | resident 1908 | TOTAL 9204 tok 112.5 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+ws_static        | resident 1908 | TOTAL 9204 tok 110.3 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as50m3_s7        | resident 1908 | TOTAL 9204 tok 103.7 tok/s 2.22 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as34m3_s7        | resident 1908 | TOTAL 9204 tok 112.6 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11129 MiB (cap 11650 MiB), exit 0
+as50m3_s11       | resident 1908 | TOTAL 9204 tok 101.9 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+as34m3_s11       | resident 1908 | TOTAL 9204 tok 114.3 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+ps512            | resident 1908 | TOTAL 9204 tok 114.2 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+ps128            | resident 1908 | TOTAL 9204 tok 114.2 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+ps0              | resident 1908 | TOTAL 9204 tok 114.3 tok/s 2.42 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+th0.65_s7        | resident 1908 | TOTAL 9204 tok 110.8 tok/s 2.49 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+th0.65_s11       | resident 1908 | TOTAL 9204 tok 107.8 tok/s 2.40 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+th0.9_s7         | resident 1908 | TOTAL 9204 tok 114.6 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+th0.9_s11        | resident 1908 | TOTAL 9204 tok 110.1 tok/s 2.19 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+dts0.3_s7        | resident 1908 | TOTAL 9204 tok 110.4 tok/s 2.26 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+dts0.3_s11       | resident 1908 | TOTAL 9204 tok 108.5 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+dts0.05_s7       | resident 1908 | TOTAL 9204 tok 106.4 tok/s 2.12 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+dts0.05_s11      | resident 1908 | TOTAL 9204 tok 107.0 tok/s 2.16 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+skip0.02_s7      | resident 1908 | TOTAL 9204 tok 115.1 tok/s 2.32 tok/verify | WATCHDOG: peak device memory 11129 MiB (cap 11650 MiB), exit 0
+skip0.02_s11     | resident 1908 | TOTAL 9204 tok 113.4 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+skip0.03_s7      | resident 1908 | TOTAL 9204 tok 115.0 tok/s 2.34 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+skip0.03_s11     | resident 1908 | TOTAL 9204 tok 115.2 tok/s 2.39 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+lend2_s7         | resident 1916 | TOTAL 9204 tok 113.2 tok/s 2.36 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+attnfix_s7       | resident 1916 | TOTAL 9204 tok 113.4 tok/s 2.36 tok/verify | WATCHDOG: peak device memory 11129 MiB (cap 11650 MiB), exit 0
+smax128_s7       | resident 1916 | TOTAL 9204 tok 117.5 tok/s 2.50 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+sp64_s7          | resident 1916 | TOTAL 9204 tok 113.2 tok/s 2.36 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+sp128_s7         | resident 1916 | TOTAL 9204 tok 117.2 tok/s 2.50 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+sp64_s11         | resident 1916 | TOTAL 9204 tok 114.1 tok/s 2.40 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+sp128_s11        | resident 1916 | TOTAL 9204 tok 113.0 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+sp64_s23         | resident 1916 | TOTAL 9204 tok 113.4 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11135 MiB (cap 11650 MiB), exit 0
+sp128_s23        | resident 1916 | TOTAL 9204 tok 113.8 tok/s 2.35 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+long sp64 s7 : TOTAL 767 tok 88.2 tok/s 2.21 tok/verify
+long sp128 s7 : TOTAL 767 tok 92.5 tok/s 2.77 tok/verify
+long sp64 s11 : TOTAL 767 tok 89.1 tok/s 2.85 tok/verify
+long sp128 s11 : TOTAL 767 tok 86.1 tok/s 2.28 tok/verify
+stg_s7           | resident 1916 | TOTAL 9204 tok 115.5 tok/s 2.35 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+stg_s11          | resident 1916 | TOTAL 9204 tok 115.3 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+thr8_steal       | resident 1916 | TOTAL 9204 tok 115.4 tok/s 2.35 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+thr10_steal      | resident 1916 | TOTAL 9204 tok 115.2 tok/s 2.35 tok/verify | WATCHDOG: peak device memory 11131 MiB (cap 11650 MiB), exit 0
+q8ring_s7        | resident 1931 | TOTAL 9204 tok 114.4 tok/s 2.29 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+q8ring_s11       | resident 1931 | TOTAL 9204 tok 115.4 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+trace_ts         | resident 1931 | TOTAL 3068 tok 118.9 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg_hints         | resident 1931 | TOTAL 3068 tok 119.1 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg_mode2         | resident 1931 | TOTAL 3068 tok 119.7 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg_mode0         | resident 1931 | TOTAL 3068 tok 119.1 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg_mode2         | resident 1931 | TOTAL 3068 tok 119.8 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg2_mode2        | resident 1931 | TOTAL 3068 tok 119.6 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pg2_mode3        | resident 1931 | TOTAL 3068 tok 119.4 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pgt_mode1        | resident 1931 | TOTAL 3068 tok 119.0 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+pgt_mode3        | resident 1931 | TOTAL 3068 tok 119.5 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+rank_m3          | resident 1931 | TOTAL 3068 tok 119.3 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+rank_m3_max2     | resident 1931 | TOTAL 3068 tok 119.3 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+rank_m3_max1     | resident 1931 | TOTAL 3068 tok 119.4 tok/s 2.64 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+rank_m3_noassist | resident 1931 | TOTAL 3068 tok 120.3 tok/s 2.74 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+rank_m0_noassist | resident 1931 | TOTAL 3068 tok 119.9 tok/s 2.74 tok/verify | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+dv0_s7           | resident 1931 | TOTAL 9204 tok 115.0 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv49210_s7       | resident 1931 | TOTAL 9204 tok 118.8 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv32826_s7       | resident 1931 | TOTAL 9204 tok 117.4 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv16442_s7       | resident 1931 | TOTAL 9204 tok 115.8 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv0_s11          | resident 1931 | TOTAL 9204 tok 114.6 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv49210_s11      | resident 1931 | TOTAL 9204 tok 117.8 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv32826_s11      | resident 1931 | TOTAL 9204 tok 118.9 tok/s 2.37 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv0_s23          | resident 1931 | TOTAL 9204 tok 116.4 tok/s 2.36 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv49210_s23      | resident 1931 | TOTAL 9204 tok 118.5 tok/s 2.33 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv32826_s23      | resident 1931 | TOTAL 9204 tok 117.5 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dv41k_s7         | resident 1931 | TOTAL 9204 tok 118.9 tok/s 2.24 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dfp4_s7          | resident 1953 | TOTAL 9204 tok 117.6 tok/s 2.39 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+dv41k_s11        | resident 1931 | TOTAL 9204 tok 118.7 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dfp4_s11         | resident 1953 | TOTAL 9204 tok 119.5 tok/s 2.29 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+dv41k_s23        | resident 1931 | TOTAL 9204 tok 121.1 tok/s 2.44 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dfp4_s23         | resident 1953 | TOTAL 9204 tok 119.8 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+dv41k_s31        | resident 1931 | TOTAL 9204 tok 119.3 tok/s 2.38 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_dv41k         | resident 1931 | TOTAL 9204 tok 108.2 tok/s 2.09 tok/verify first-rejected 46.7% draft 1.573 ms verify 17.392 ms widths 2:74.8%/1.42t 4:14.4%/2.82t 8:10.8%/5.67t oracle-width 118.0 tok/s (2.33 tok/verify), verify-all 62.1 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_dfp4          | resident 1953 | TOTAL 9204 tok 109.2 tok/s 2.08 tok/verify first-rejected 46.7% draft 1.352 ms verify 17.396 ms widths 2:74.5%/1.42t 4:14.3%/2.87t 8:11.2%/5.48t oracle-width 119.1 tok/s (2.32 tok/verify), verify-all 63.3 tok/s | WATCHDOG: peak device memory 11137 MiB (cap 11650 MiB), exit 0
+tf_attnstage     | resident 1931 | TOTAL 9204 tok 107.8 tok/s 2.07 tok/verify first-rejected 47.3% draft 1.572 ms verify 17.318 ms widths 2:74.8%/1.42t 4:14.0%/2.78t 8:11.2%/5.53t oracle-width 118.1 tok/s (2.32 tok/verify), verify-all 62.5 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_slide8opt     | resident 1931 | TOTAL 9204 tok 108.4 tok/s 2.08 tok/verify first-rejected 47.1% draft 1.573 ms verify 17.316 ms widths 2:74.8%/1.42t 4:14.4%/2.80t 8:10.8%/5.69t oracle-width 118.0 tok/s (2.32 tok/verify), verify-all 62.5 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_w1248         | resident ? | NO RESULT | WATCHDOG: peak device memory 3575 MiB (cap 11650 MiB), exit 1
+tf_l2pf          | resident 1931 | TOTAL 9204 tok 108.3 tok/s 2.08 tok/verify first-rejected 47.1% draft 1.572 ms verify 17.331 ms widths 2:74.8%/1.42t 4:14.4%/2.80t 8:10.8%/5.69t oracle-width 117.9 tok/s (2.32 tok/verify), verify-all 62.1 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+joindbg_s7       | resident 1931 | TOTAL 9204 tok 117.3 tok/s 2.23 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+joindbg_pf_s7    | resident 1931 | TOTAL 9204 tok 117.1 tok/s 2.23 tok/verify | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+assist0_s7       | resident 1931 | TOTAL 9204 tok 121.7 tok/s 2.45 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+assist0.2_s7     | resident 1931 | TOTAL 9204 tok 117.9 tok/s 2.27 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_assist0       | resident 1931 | TOTAL 9204 tok 109.2 tok/s 2.09 tok/verify first-rejected 46.3% draft 1.569 ms verify 17.299 ms widths 2:74.4%/1.43t 4:14.3%/2.82t 8:11.3%/5.57t oracle-width 119.7 tok/s (2.35 tok/verify), verify-all 64.1 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_assist0.2     | resident 1931 | TOTAL 9204 tok 108.8 tok/s 2.08 tok/verify first-rejected 46.6% draft 1.571 ms verify 17.241 ms widths 2:74.7%/1.43t 4:14.3%/2.81t 8:11.0%/5.57t oracle-width 119.3 tok/s (2.34 tok/verify), verify-all 63.7 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_assist0_pf    | resident 1931 | TOTAL 9204 tok 109.5 tok/s 2.09 tok/verify first-rejected 46.3% draft 1.569 ms verify 17.241 ms widths 2:74.4%/1.43t 4:14.3%/2.82t 8:11.3%/5.57t oracle-width 120.1 tok/s (2.35 tok/verify), verify-all 64.2 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tfa0_pf0         | resident 1931 | TOTAL 3068 tok 120.3 tok/s 2.81 tok/verify first-rejected 38.9% draft 1.569 ms verify 21.372 ms widths 2:59.3%/1.41t 4:16.9%/2.94t 8:23.8%/6.19t oracle-width 130.8 tok/s (3.08 tok/verify), verify-all 81.7 tok/s | WATCHDOG: peak device memory 11139 MiB (cap 11650 MiB), exit 0
+tfa0_pf1         | resident 1931 | TOTAL 3068 tok 120.9 tok/s 2.81 tok/verify first-rejected 38.9% draft 1.565 ms verify 21.244 ms widths 2:59.3%/1.41t 4:16.9%/2.94t 8:23.8%/6.19t oracle-width 131.5 tok/s (3.08 tok/verify), verify-all 82.1 tok/s | WATCHDOG: peak device memory 11143 MiB (cap 11650 MiB), exit 0
+tf_a0_pfgate     | resident 1931 | TOTAL 9204 tok 98.4 tok/s 2.09 tok/verify first-rejected 46.3% draft 1.566 ms verify 19.401 ms widths 2:74.4%/1.43t 4:14.3%/2.82t 8:11.3%/5.57t oracle-width 107.9 tok/s (2.35 tok/verify), verify-all 58.9 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tf_a0_pfgate2    | resident 1931 | TOTAL 9204 tok 109.7 tok/s 2.09 tok/verify first-rejected 46.3% draft 1.568 ms verify 17.221 ms widths 2:74.4%/1.43t 4:14.3%/2.82t 8:11.3%/5.57t oracle-width 120.2 tok/s (2.35 tok/verify), verify-all 64.4 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tf_a0_pf_pg3     | resident 1931 | TOTAL 9204 tok 109.9 tok/s 2.09 tok/verify first-rejected 46.3% draft 1.567 ms verify 17.186 ms widths 2:74.4%/1.43t 4:14.3%/2.82t 8:11.3%/5.57t oracle-width 120.4 tok/s (2.35 tok/verify), verify-all 64.5 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+a0pf_s7          | resident 1931 | TOTAL 9204 tok 122.4 tok/s 2.45 tok/verify | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+a0pf_s11         | resident 1931 | TOTAL 9204 tok 119.4 tok/s 2.28 tok/verify | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+a0pf_s23         | resident 1931 | TOTAL 9204 tok 118.9 tok/s 2.31 tok/verify | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tf_fmma          | resident 1931 | TOTAL 9204 tok 109.3 tok/s 2.07 tok/verify first-rejected 47.2% draft 1.567 ms verify 17.116 ms widths 2:74.8%/1.42t 4:14.3%/2.86t 8:10.9%/5.56t oracle-width 119.2 tok/s (2.31 tok/verify), verify-all 63.4 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tf_smma          | resident 1931 | TOTAL 9204 tok 109.7 tok/s 2.08 tok/verify first-rejected 46.8% draft 1.570 ms verify 17.086 ms widths 2:74.5%/1.42t 4:14.2%/2.81t 8:11.3%/5.51t oracle-width 120.3 tok/s (2.32 tok/verify), verify-all 64.5 tok/s | WATCHDOG: peak device memory 11149 MiB (cap 11650 MiB), exit 0
+tf_mintok3       | resident 1931 | TOTAL 9204 tok 109.1 tok/s 2.08 tok/verify first-rejected 46.5% draft 1.568 ms verify 17.228 ms widths 2:74.7%/1.43t 4:14.2%/2.82t 8:11.1%/5.55t oracle-width 119.4 tok/s (2.33 tok/verify), verify-all 63.3 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_mintok2       | resident 1931 | TOTAL 9204 tok 109.2 tok/s 2.08 tok/verify first-rejected 46.5% draft 1.569 ms verify 17.204 ms widths 2:74.7%/1.43t 4:14.2%/2.82t 8:11.1%/5.55t oracle-width 119.6 tok/s (2.33 tok/verify), verify-all 63.5 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_thr14         | resident 1931 | TOTAL 9204 tok 107.2 tok/s 2.08 tok/verify first-rejected 46.5% draft 1.562 ms verify 17.476 ms widths 2:74.7%/1.43t 4:14.2%/2.82t 8:11.1%/5.55t oracle-width 117.4 tok/s (2.33 tok/verify), verify-all 62.8 tok/s | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+tf_dfp4_now      | resident 1953 | TOTAL 9204 tok 111.2 tok/s 2.07 tok/verify first-rejected 47.3% draft 1.349 ms verify 16.974 ms widths 2:74.8%/1.41t 4:14.2%/2.83t 8:11.0%/5.57t oracle-width 121.0 tok/s (2.29 tok/verify), verify-all 65.0 tok/s | WATCHDOG: peak device memory 11157 MiB (cap 11650 MiB), exit 0
+base_s7          | resident 1931 | TOTAL 9204 tok 120.6 tok/s 2.30 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dfp4n_s7         | resident 1953 | TOTAL 9204 tok 123.2 tok/s 2.35 tok/verify | WATCHDOG: peak device memory 11157 MiB (cap 11650 MiB), exit 0
+base_s11         | resident 1931 | TOTAL 9204 tok 118.2 tok/s 2.29 tok/verify | WATCHDOG: peak device memory 11145 MiB (cap 11650 MiB), exit 0
+dfp4n_s11        | resident 1953 | TOTAL 9204 tok 119.8 tok/s 2.22 tok/verify | WATCHDOG: peak device memory 11157 MiB (cap 11650 MiB), exit 0
+tf_tail4         | resident 1968 | TOTAL 9204 tok 111.3 tok/s 2.06 tok/verify first-rejected 47.6% draft 1.346 ms verify 16.774 ms widths 2:75.0%/1.41t 4:14.0%/2.83t 8:11.0%/5.49t oracle-width 121.8 tok/s (2.29 tok/verify), verify-all 65.6 tok/s | WATCHDOG: peak device memory 11202 MiB (cap 11650 MiB), exit 0
+tail4_s7         | resident 1953 | TOTAL 9204 tok 121.2 tok/s 2.38 tok/verify | WATCHDOG: peak device memory 11252 MiB (cap 11650 MiB), exit 0

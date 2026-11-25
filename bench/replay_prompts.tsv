@@ -1,0 +1,12 @@
+explain	Explain how a hash map handles collisions, with a short Python example.
+lru	Write a Python module implementing an LRU cache with O(1) get/put, type hints and unit tests.
+cpp	Write a C++20 function that parses a CSV line with quoted fields into a std::vector<std::string>, and explain the edge cases.
+js	I have a React component that re-renders on every keystroke and feels slow. What are the usual causes and fixes? Show code.
+math	A train leaves at 14:05 going 92 km/h; another leaves the same station at 14:40 going 118 km/h on the same track. When and where does the second catch the first? Show your reasoning.
+story	Write a short story (about 400 words) about a lighthouse keeper who finds a radio that receives messages from tomorrow.
+chat	hey, I've been feeling unmotivated with my side projects lately. any advice that isn't the usual generic stuff?
+plan	Plan a 5-day trip to Japan for someone who likes food, old architecture and hiking, on a mid-range budget.
+debug	My Rust program panics with 'already borrowed: BorrowMutError' inside a RefCell. What does it mean and how do I find and fix it?
+compare	Compare PostgreSQL and SQLite for a small SaaS app with about 200 users. Be concrete about trade-offs.
+summary	Summarize the main ideas of the transformer architecture for a programmer who knows basic linear algebra.
+gpu	Why is LLM decoding usually memory-bandwidth bound while prefill is compute bound? Use numbers for a 7B model.
