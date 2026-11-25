@@ -95,7 +95,7 @@ fn stopped(code: Option<i32>) -> Result<()> {
     println!("\nThe server stopped (exit code {}). The lines above say why. Common fixes, in inkling.toml:", code.map(|c| c.to_string()).unwrap_or("?".into()));
     println!("  - \"cannot hold the KV cache of max_ctx\": lower max_ctx (e.g. 262144).");
     println!("  - out of memory on the GPU: close other GPU programs, or lower vram_cap_gib a little.");
-    println!("  - host memory / cudaHostRegister errors: close programs to free RAM (the engine pins ~16 GB).");
+    println!("  - host memory / cudaHostRegister errors: close programs to free RAM (the engine pins ~14 GB).");
     println!("  - address already in use: another program uses the port; change port.");
     println!("AGENTS.md (in the repository) explains every setting.");
     bail!("server exited")

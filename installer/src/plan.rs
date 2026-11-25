@@ -21,7 +21,7 @@ pub enum Support {
 impl Support {
     pub fn label(self) -> &'static str {
         match self {
-            Support::Confirmed => "Confirmed setup",
+            Support::Confirmed => "Supported",
             Support::Expected => "Should work (not confirmed yet)",
             Support::Experimental => "Experimental",
             Support::Unsupported => "Not supported as is",
@@ -184,6 +184,12 @@ pub fn assess(hw: &Hardware) -> Assessment {
              and the context is limited to {}k.",
             settings.max_ctx / 1000
         ));
+    } else if g.cc == (8, 9) && (15.0..17.5).contains(&vram) {
+        // 16 GB RTX 40 (4080 SUPER, 4080, 4070 Ti SUPER, 4060 Ti 16 GB): supported; a tester's 4080 SUPER did ~200 tok/s
+        notes.push(format!(
+            "{vram:.0} GB of VRAM: about 900 more experts stay on the GPU than on the 12 GB reference. A tester's \
+             RTX 4080 SUPER reached ~200 tok/s decode."
+        ));
     } else if vram >= 13.0 {
         if g.cc == (8, 9) {
             lower(Support::Expected);
@@ -203,13 +209,13 @@ pub fn assess(hw: &Hardware) -> Assessment {
     if ram < 24.0 {
         lower(Support::Unsupported);
         notes.push(format!(
-            "{ram:.0} GB of RAM: the engine keeps all experts (~16 GB) in pinned system memory and needs 32 GB. \
+            "{ram:.0} GB of RAM: the engine keeps all experts (~13 GB, ~14 GB pinned in all) in system memory and needs 32 GB. \
              AGENTS.md describes the changes for less RAM."
         ));
     } else if ram < 30.0 {
         lower(Support::Experimental);
         notes.push(format!(
-            "{ram:.0} GB of RAM: below the 32 GB reference; ~16 GB is pinned for the experts, so loading may fail or \
+            "{ram:.0} GB of RAM: below the 32 GB reference; ~14 GB is pinned for the experts, so loading may fail or \
              the system may page. Close other programs."
         ));
     }
@@ -235,6 +241,11 @@ pub fn assess(hw: &Hardware) -> Assessment {
     }
 
     let summary = match support {
+        Support::Confirmed if vram >= 15.0 => format!(
+            "Supported: {} with {vram:.0} GB. More of the model fits on the GPU than on the 12 GB reference, so it is \
+             faster (a tester's RTX 4080 SUPER reached ~200 tok/s).",
+            g.name
+        ),
         Support::Confirmed => {
             "This is the confirmed reference setup: RTX 40 with 12 GB + 32 GB RAM: 100+ tok/s with a 600k context.".into()
         }
@@ -279,6 +290,16 @@ mod tests {
         assert_eq!(a.cuda_arch.as_deref(), Some("89"));
         // the measured ceiling on this machine is ~850k
         assert!((800_000..900_000).contains(&a.max_ctx_fit), "{}", a.max_ctx_fit);
+    }
+
+    #[test]
+    fn rtx4080_super_16gb_is_supported() {
+        let a = assess(&hw("NVIDIA GeForce RTX 4080 SUPER", 16376, (8, 9), 31.9, 8));
+        assert_eq!(a.support, Support::Confirmed, "{:?}", a.notes);
+        assert_eq!(a.settings.vram_cap_gib, 15.3);
+        assert_eq!(a.settings.vision, Vision::Gpu);
+        assert!(a.summary.contains("200 tok/s"), "{}", a.summary);
+        assert!(a.max_ctx_fit >= 1_048_576);
     }
 
     #[test]

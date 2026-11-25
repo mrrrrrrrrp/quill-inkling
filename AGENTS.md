@@ -84,8 +84,8 @@ Reason from this before changing settings.
 | Sliding-window KV | int8 |
 | Drafter (DFlash2) | FP4 |
 
-**System RAM: why 32 GB is needed.** About 16–17 GiB is pinned (`cudaHostRegister`):
-- All 3,072 experts, ~14.6 GiB, loaded into one host region and pinned (`src/model/experts.cpp`)
+**System RAM: why 32 GB is needed.** About 14 GiB is pinned (`cudaHostRegister`):
+- All 3,072 experts, ~12.8 GiB, loaded into one host region and pinned (`src/model/experts.cpp`)
 - The embedding table, 0.93 GB, mapped pinned memory
 - The drafter's codebooks (206 MB) and a prompt checkpoint (205 MB)
 - With `vision = "cpu"`, the image tower also runs from RAM.
@@ -96,7 +96,7 @@ If pinning fails, the log says `NOT pinned` and transfers slow down.
 - ~2.1 GiB is fixed: dense weights, the drafter, the CUDA context and buffers.
 - Everything else under `vram_cap_gib`, minus what other programs use, becomes one **shared region**:
   - The q4 KV cache grows from the bottom as a chat gets longer.
-  - Expert slots (~4.9 MiB each) fill from the top.
+  - Expert slots (~4.3 MiB each) fill from the top.
   - 24 staging slots, and an 806 MiB prefill scratch that is lent to experts between prompts.
 - Dynamic VRAM (CUDA VMM, 32 MiB chunks) gives chunks back when another program needs memory, and takes them back
   later.
@@ -135,8 +135,9 @@ Install and you're done. Nothing to tune.
 
 ### RTX 40/50 with 16 GB (4060 Ti 16 GB, 4070 Ti SUPER, 4080, 5060 Ti 16 GB, 5070 Ti, 5080)
 - **What the installer sets:**
-  - `vram_cap_gib` = card size − 0.7 (e.g. 15.2), which leaves room for ~800 more experts on the GPU. Expect it to
-    be faster.
+  - `vram_cap_gib` = card size − 0.7 (15.3 on a 4080 SUPER), which leaves room for ~900 more experts on the GPU.
+  - A tester's RTX 4080 SUPER reached ~200 tok/s decode with a raised VRAM cap. Use that as the target for 16 GB
+    Ada cards.
   - `vision = "gpu"`, and 1M context is offered.
 - **Check the start-up log** for `experts: shared KV/expert region … N resident`. N should be well above 1,800.
 - **Then A/B, one at a time** (§6):
@@ -148,7 +149,7 @@ Install and you're done. Nothing to tune.
 - **Laptop cards** have the same VRAM sizes but lower clocks and power limits, so expect less.
 
 ### RTX 4090 / 5090 (24 / 32 GB): every expert may fit
-- **Every expert fits.** 3,072 × ~4.9 MiB ≈ 14.6 GiB, and a 23.3 GiB cap gives a ~20 GiB region. The pool builder
+- **Every expert fits.** 3,072 × ~4.3 MiB ≈ 12.8 GiB, and a 23.3 GiB cap gives a ~20 GiB region. The pool builder
   stops placing experts when there are none left, so the extra slots stay empty.
   - **This path is untested.** Check the log, and check that adaptive residency doesn't misbehave with empty slots
     (`src/model/residency.cpp`). If it does, run with `extra_args = ["--no-adapt"]`.
@@ -156,10 +157,10 @@ Install and you're done. Nothing to tune.
   - `src/kernels/attn/attn89.cu`, `src/kernels/moe/moe.cu`, `src/kernels/dense/gemv.cu`
   - The verify widths and the draft threshold
   - Long-context attention, now the largest cost (`bench/replay_long.jsonl`)
-- **RAM win (needs a code change).** When every expert is resident, the 14.6 GiB pinned host copy is only an
+- **RAM win (needs a code change).** When every expert is resident, the 12.8 GiB pinned host copy is only an
   upload source.
   - Release or unpin it after `build_pools_shared` uploads everything (`src/model/experts.cpp`).
-  - That drops the RAM requirement to ~8 GB and makes 16 GB machines work on these cards.
+  - That cuts the pinned RAM from ~14 GiB to ~1.5 GiB and makes 16 GB machines work on these cards.
   - Keep it behind a check that every expert really is resident.
 
 ### RTX 50 (Blackwell, sm_120)
@@ -208,7 +209,7 @@ starting. An RTX 3090's 24 GB would hold every expert, so the CPU-tier caveats a
   1. **A 24 GB+ GPU** holds every expert. Free the host copy after upload (above).
   2. **Keep only the non-resident experts in host memory.** Use static residency (`--no-adapt`), size the host
      region to the misses (`ExpertStore` load in `src/model/experts.cpp`), and disable swaps. That needs about
-     (3,072 − resident) × 4.9 MiB of RAM.
+     (3,072 − resident) × 4.3 MiB of RAM.
   3. **Map the safetensors file and let Windows page it.** This works but is slow: misses become disk reads. Not
      recommended.
 
@@ -311,7 +312,7 @@ curl http://127.0.0.1:8003/v1/chat/completions -H "Content-Type: application/jso
 ```
 
 **Start-up log lines to read:**
-- `experts: 14.xx GiB in host memory (… pinned …)`
+- `experts: 12.81 GiB in host memory (… pinned …)`
 - `vram: dynamic region … MiB`
 - `experts: shared KV/expert region X GiB: N slots (24 staging), M resident, KV up to Y GiB`
 

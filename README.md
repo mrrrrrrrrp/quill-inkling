@@ -5,6 +5,9 @@
 on the CPU. It serves an **OpenAI-compatible API** and a **chat page** in your browser.
 
 - **Fast:** 100+ tok/s decode with a 600k-token context, on a 12 GB RTX 40 card and 32 GB of RAM.
+- **Faster on 16 GB cards:** a tester's **RTX 4080 SUPER** reached **~200 tok/s** decode with a bit more of the model
+  kept on the GPU. 16 GB RTX 40 cards are supported, and the installer gives them the larger VRAM budget
+  automatically.
 - **Higher quality than Unsloth's UD-Q4_K_XL:** mean KL divergence from the full-precision model is 0.0071, against
   0.0107 for UD-Q4_K_XL.[¹](#quality-note)
 - **Images included:** the vision encoder and projector run on the CPU, so they take no VRAM. See
@@ -42,7 +45,20 @@ Results on it, at temperature 1 with DFlash2:
 so the two numbers come from different text. 0.0107 was also the bar every change in this repo had to stay under.
 Lower KLD means the output distribution is closer to the full-precision model.
 
-**Different hardware?** For an RTX 50, a 16–32 GB card, less RAM or another CPU, the installer scales the settings
+### 16 GB cards: faster
+
+The 12 GB card above has to leave ~40% of the experts in system RAM, where the CPU computes them, and the GPU waits on
+that. A 16 GB card keeps about 900 more experts on the GPU, so far fewer tokens wait on the CPU.
+
+| | Reported |
+|---|---|
+| GPU | **RTX 4080 SUPER (16 GB)**, tested by a user |
+| Decode | **~200 tok/s**, with a little more of the model kept on the GPU (a higher VRAM cap) |
+
+On 16 GB RTX 40 cards the installer sets the VRAM cap to the card's size minus 0.7 GB (15.3 GB on a 4080 SUPER)
+instead of the 12 GB card's 11.3. It also runs images on the GPU and offers the full 1M context.
+
+**Different hardware?** For an RTX 50, a 24–32 GB card, less RAM or another CPU, the installer scales the settings
 (see below). To tune further, point your coding agent (Claude Code, Codex, …) at **[AGENTS.md](AGENTS.md)**. It
 explains how the engine uses VRAM, RAM and the CPU, and walks the agent through setting it up and measuring it on
 your machine.
@@ -69,10 +85,11 @@ your machine.
 | Your machine | Verdict | What changes |
 |---|---|---|
 | RTX 40, 12 GB, 32 GB RAM | **Confirmed** | Nothing: the reference settings |
-| RTX 40 with 16–24 GB | Should work | VRAM cap = card size − 0.7 GB, so more experts stay on the GPU (expect it to be faster). Images on the GPU. 1M context available. |
+| RTX 40, 16 GB (4080 SUPER, 4080, 4070 Ti SUPER, …) | **Supported**: ~200 tok/s reported on a 4080 SUPER | VRAM cap = card size − 0.7 GB, so ~900 more experts stay on the GPU. Images on the GPU. 1M context available. |
+| RTX 4090 (24 GB) | Should work | Every expert may fit on the GPU. That path hasn't been tested yet. |
 | RTX 50 (Blackwell) | Should work | The prebuilt engine includes `sm_120a` code. Not confirmed on an RTX 50 yet. |
 | 8 GB RTX 40/50 | Experimental | 262k context, few experts on the GPU, much slower |
-| 24 GB RAM | Experimental | ~16 GB is pinned for the experts, so loading may fail |
+| 24 GB RAM | Experimental | ~14 GB is pinned for the experts, so loading may fail |
 | 16 GB RAM, RTX 30 or older, no AVX2 | Not supported as is | The engine needs changes; AGENTS.md describes them |
 
 Every setting is in `inkling.toml` in the install folder, with a comment on each line. Edit it and restart Inkling.
