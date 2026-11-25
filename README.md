@@ -4,6 +4,12 @@
 (abliterated), with **DFlash2** speculative decoding. The experts that fit in VRAM run on the GPU, and the rest run
 on the CPU. It serves an **OpenAI-compatible API** and a **chat page** in your browser.
 
+- **Fast:** 100+ tok/s decode with a 600k-token context, on a 12 GB RTX 40 card and 32 GB of RAM.
+- **Higher quality than Unsloth's UD-Q4_K_XL:** mean KL divergence from the full-precision model is 0.0071, against
+  0.0107 for UD-Q4_K_XL.[¹](#quality-note)
+- **Images included:** the vision encoder and projector run on the CPU, so they take no VRAM. See
+  [Images](#images).
+
 A Windows installer, written in Rust, checks your hardware, picks the settings, downloads and verifies everything,
 and sets up a Start-menu launcher.
 
@@ -28,8 +34,13 @@ Results on it, at temperature 1 with DFlash2:
 | Decode with a ~300k-token chat (code) | ~100 tok/s |
 | Context window | **600k tokens** (600,064), q4 KV cache |
 | Prefill | ~2,200 tok/s (32k-token prompt) |
-| Quality | mean KLD 0.0071 vs the BF16 model (WikiText-2, 2 × 1,024 tokens). The bar for every change was 0.0107, the level of Unsloth's UD-Q4_K_XL |
+| Quality | mean KLD 0.0071 vs the BF16 model (WikiText-2, 2 × 1,024 tokens): lower than Unsloth's UD-Q4_K_XL (0.0107)[¹](#quality-note) |
 | GPU memory | stays under 11.3 GB in total, counting every program (Task Manager's number), and gives memory back when other apps need it |
+
+<a id="quality-note"></a>¹ Our 0.0071 is measured against the BF16 model on WikiText-2, with the harness in
+`bench/` (AGENTS.md section 6). The 0.0107 is Unsloth's published figure for UD-Q4_K_XL on their own evaluation set,
+so the two numbers come from different text. 0.0107 was also the bar every change in this repo had to stay under.
+Lower KLD means the output distribution is closer to the full-precision model.
 
 **Different hardware?** For an RTX 50, a 16–32 GB card, less RAM or another CPU, the installer scales the settings
 (see below). To tune further, point your coding agent (Claude Code, Codex, …) at **[AGENTS.md](AGENTS.md)**. It
@@ -146,6 +157,19 @@ xhigh and max are the same level.
 
 [`bench/PLAN.md`](bench/PLAN.md) logs every experiment, with numbers, kept or rejected.
 [`engine/DESIGN.md`](engine/DESIGN.md) and [`engine/KERNELS.md`](engine/KERNELS.md) describe the engine.
+
+## Images
+
+Inkling 2 Mini reads images. On the confirmed setup the whole image tower runs on the CPU: the vision encoder and the
+projector that maps its output into the language model. Its 636 MB of BF16 weights stay in system RAM, and the math
+runs in FP32 on the CPU cores.
+
+- **No VRAM used:** every byte of the 12 GB goes to experts and the KV cache, which is what decode speed depends on.
+  The cost is that an image takes longer to read in than it would on the GPU. Text decoding speed is unaffected.
+- **Size:** an image becomes one token per 40×40 pixels. Larger images are scaled down to at most 1,024 tokens
+  (`image_max_tokens` in `inkling.toml`).
+- **On GPUs with 16 GB or more**, the installer runs the tower on the GPU instead (`vision = "gpu"`, ~0.6 GB).
+  `vision = "off"` makes it text only.
 
 ## Repository layout
 
