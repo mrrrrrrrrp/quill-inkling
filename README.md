@@ -30,7 +30,6 @@ Both are the same program; the second starts with "Remove refusals (abliteration
 the installer on the same folder, tick or untick the box and click **Update / repair**. On the command line:
 `inkling-cli install --abliteration off` (or `on`).
 
-The KL divergence figure above was measured with the abliterated model; the original model has not been measured.
 
 ## Confirmed setup
 
