@@ -1,4 +1,4 @@
-# Inkling 2 Mini, local: 100+ tok/s with a 600k context on a 12 GB RTX 40 card
+# Inkling 2 Mini, local: 100-150+ tok/s with a 600k context on a 12 GB RTX 40 card
 
 **quill** is an inference engine (C++/CUDA, no Python at run time) written for one model: **Inkling 2 Mini**
 (abliterated), with **DFlash2** speculative decoding. The experts that fit in VRAM run on the GPU, and the rest run
