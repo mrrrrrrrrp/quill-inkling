@@ -33,7 +33,7 @@ Results on it, at temperature 1 with DFlash2:
 | | |
 |---|---|
 | Decode, chat and code | **100+ tok/s**: ~120 median on a 12-prompt replay set, 105–150 depending on content |
-| Decode at 22k context | ~89 tok/s |
+| Decode at 22k context chat | ~89 tok/s |
 | Decode with a ~300k-token chat (code) | ~100 tok/s |
 | Context window | **600k tokens** (600,064), q4 KV cache |
 | Prefill | ~2,200 tok/s (32k-token prompt) |
