@@ -95,9 +95,9 @@ fn check_id(c: &Check) -> String {
 }
 
 /// Total bytes the models need, and how many of them are still to download (for the UI).
-pub fn plan_bytes(http: &Http, models_dir: &Path) -> Result<(u64, u64)> {
+pub fn plan_bytes(http: &Http, models_dir: &Path, abliterated: bool) -> Result<(u64, u64)> {
     let (mut total, mut missing) = (0, 0);
-    for m in release::MODELS {
+    for m in release::models(abliterated) {
         let rev = release::pinned_revision(m.repo).context("model not pinned")?;
         for f in list_files(http, m, rev)? {
             total += f.size;

@@ -45,12 +45,19 @@ pub struct ModelRepo {
     pub include: &'static [&'static str],
 }
 
+pub const ABLATION_DIR: &str = "ablation-ingine";
+
+/// The repositories an install needs; the abliteration only when it is switched on.
+pub fn models(abliterated: bool) -> impl Iterator<Item = &'static ModelRepo> {
+    MODELS.iter().filter(move |m| abliterated || m.dir != ABLATION_DIR)
+}
+
 pub const MODELS: &[ModelRepo] = &[
     ModelRepo { repo: "thinkingmachines/Inkling-2-Mini", dir: "Inkling-2-Mini", include: &[] },
     ModelRepo { repo: "incoai/Inkling-2-Mini-DFlash2", dir: "Inkling-2-Mini-DFlash2", include: &[] },
     ModelRepo {
         repo: "satellitedown/Inkling-2-Mini-abliterated-ingine",
-        dir: "ablation-ingine",
+        dir: ABLATION_DIR,
         include: &["inkling-2-mini-abliterated.safetensors", "LICENSE", "NOTICE", "README.md", "SHA256SUMS"],
     },
 ];

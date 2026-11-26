@@ -247,6 +247,7 @@ The launcher reads `<install>\inkling.toml` at every start. `inkling-cli command
 | `server.vision` | "cpu" | `cpu` (no VRAM), `gpu` (0.6 GB VRAM, faster images), `off` |
 | `server.vision_threads`, `server.image_max_tokens` | 8, 1024 | The image tower: threads, and tokens per image (one per 40×40 px, at most 10609) |
 | `server.spec` | true | DFlash2 speculative decoding |
+| `server.abliterated` | true | Remove refusals. false: the original model (id `inkling-2-mini`; leave `--ablation` out of the §6 commands) |
 | `server.extra_args` | [] | More `ingine-serve` flags (`ingine-serve.exe --help`) |
 | `[env]` | `QUILL_PASSES = "3"` | Environment of the server: the switches below. With more than one GPU the installer adds `CUDA_DEVICE_ORDER` / `CUDA_VISIBLE_DEVICES`. |
 

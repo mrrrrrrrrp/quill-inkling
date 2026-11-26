@@ -48,6 +48,8 @@ pub struct Server {
     pub vision_threads: u32,
     pub image_max_tokens: u32,
     pub spec: bool,
+    /// remove the model's refusals (the abliteration file); false runs the original model
+    pub abliterated: bool,
     pub extra_args: Vec<String>,
 }
 
@@ -64,6 +66,7 @@ impl Default for Server {
             vision_threads: 8,
             image_max_tokens: 1024,
             spec: true,
+            abliterated: true,
             extra_args: Vec::new(),
         }
     }
@@ -143,6 +146,12 @@ impl Config {
         out += &format!("image_max_tokens = {}\n", s.image_max_tokens);
         out += "# DFlash2 speculative decoding (most of the speed)\n";
         out += &format!("spec = {}\n", s.spec);
+        out += "# true: refusals removed (abliteration); false: the original model. Turning it on needs the installer
+";
+        out += "# to have run with it on once, which downloads the file
+";
+        out += &format!("abliterated = {}
+", s.abliterated);
         out += "# more ingine-serve flags, e.g. [\"--verify-widths\", \"2,4,8\"] (ingine-serve --help)\n";
         out += &format!(
             "extra_args = [{}]\n\n",
@@ -161,6 +170,11 @@ impl Config {
         out
     }
 
+    /// the id the server reports on its API
+    pub fn model_id(&self) -> &'static str {
+        if self.server.abliterated { "inkling-2-mini-abliterated" } else { "inkling-2-mini" }
+    }
+
     pub fn url(&self) -> String {
         let h = match self.server.host.as_str() {
             "0.0.0.0" | "::" | "" => "127.0.0.1",
@@ -177,9 +191,10 @@ impl Config {
             "--engine".into(),
             "--model-dir".into(),
             p(m.join("Inkling-2-Mini")),
-            "--ablation".into(),
-            p(m.join("ablation-ingine").join("inkling-2-mini-abliterated.safetensors")),
         ];
+        if s.abliterated {
+            a.extend(["--ablation".into(), p(m.join("ablation-ingine").join("inkling-2-mini-abliterated.safetensors"))]);
+        }
         if s.spec {
             a.extend(["--spec".into(), "--draft-dir".into(), p(m.join("Inkling-2-Mini-DFlash2"))]);
         }
@@ -263,6 +278,16 @@ mod tests {
         assert_eq!(back.server, c.server);
         assert_eq!(back.env, c.env);
         assert_eq!(back.install.gpu, c.install.gpu);
+    }
+
+    #[test]
+    fn original_model_has_no_ablation() {
+        let mut c = Config::default();
+        c.server.abliterated = false;
+        assert!(!c.server_args(Path::new(r"C:\Inkling")).contains(&"--ablation".to_string()));
+        assert_eq!(c.model_id(), "inkling-2-mini");
+        let back: Config = toml::from_str(&c.to_commented_toml()).unwrap();
+        assert!(!back.server.abliterated);
     }
 
     #[test]

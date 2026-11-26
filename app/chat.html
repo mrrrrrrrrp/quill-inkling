@@ -295,7 +295,7 @@ function renderAll() {
   const log = $("log");
   log.innerHTML = "";
   if (!state.messages.length) {
-    log.innerHTML = `<div class="empty"><h1>Inkling 2 Mini</h1>abliterated · DFlash2 speculative decoding · 600k context · images on the CPU</div>`;
+    log.innerHTML = `<div class="empty"><h1>Inkling 2 Mini</h1>DFlash2 speculative decoding · 600k context · images on the CPU</div>`;
   }
   for (const m of state.messages) log.appendChild(renderMessage(m));
   log.scrollTop = log.scrollHeight;

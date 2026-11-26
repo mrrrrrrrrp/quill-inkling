@@ -1,4 +1,5 @@
-# Packages a release into dist\: Inkling-Setup.exe, the engine zip, SHA256SUMS.txt. Attach all three to a GitHub
+# Packages a release into dist\: Inkling-Setup.exe, Inkling-Setup-Original.exe, inkling-cli.exe, the engine zip,
+# SHA256SUMS.txt. Attach them all to a GitHub
 # release tagged v<version> (installer\Cargo.toml). Build first:
 #   $env:QUILL_CUDA_ARCH = "89;120a"; engine\build.cmd "" build-release
 #   $env:INKLING_REPO = "<owner>/<repo>"; cargo build --release --manifest-path installer\Cargo.toml
@@ -33,6 +34,8 @@ foreach ($e in "serve\ingine-serve.exe", "bench\ingine-bench.exe", "kld\quill-kl
 Compress-Archive -Path "$dist\stage\bin" -DestinationPath "$dist\$asset" -CompressionLevel Optimal
 Remove-Item -Recurse -Force "$dist\stage"
 Copy-Item $Installer "$dist\Inkling-Setup.exe"
+# the same program; its file name switches the abliteration off
+Copy-Item $Installer "$dist\Inkling-Setup-Original.exe"
 # inkling-cli.exe: the same program with the console subsystem (PE optional header + 68), for terminals and agents:
 # PowerShell and cmd neither wait for a windowed program nor capture its output
 $b = [IO.File]::ReadAllBytes((Resolve-Path $Installer).Path)

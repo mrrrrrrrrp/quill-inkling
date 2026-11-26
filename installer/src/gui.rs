@@ -237,7 +237,7 @@ impl eframe::App for App {
                     ui.label(RichText::new(format!("quill engine · installer {}", release::VERSION)).weak());
                 });
                 ui.label(
-                    "Runs Inkling 2 Mini (abliterated) locally on your NVIDIA GPU: an OpenAI-compatible server with a chat \
+                    "Runs Inkling 2 Mini locally on your NVIDIA GPU: an OpenAI-compatible server with a chat \
                      page in your browser. Confirmed on an RTX 40 with 12 GB + 32 GB RAM: 100+ tok/s, 600k context.",
                 );
                 ui.add_space(6.0);
@@ -334,6 +334,12 @@ impl App {
                     for v in [Vision::Cpu, Vision::Gpu, Vision::Off] {
                         ui.selectable_value(&mut self.cfg.server.vision, v, v.label());
                     }
+                });
+                ui.end_row();
+                ui.label("Refusals");
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.cfg.server.abliterated, "Remove refusals (abliteration)");
+                    ui.label(RichText::new("can worsen overall model performance").color(support_color(Support::Experimental)));
                 });
                 ui.end_row();
                 ui.label("Shortcuts");
@@ -445,8 +451,9 @@ impl App {
                 ui.label(format!(
                     "Start it from the Start menu or desktop (\"Inkling\"). The server window shows the log; the first load takes \
                      about a minute, then the chat opens at http://127.0.0.1:{0}/.\nOpenAI-compatible API: http://127.0.0.1:{0}/v1, \
-                     model id inkling-2-mini-abliterated.",
-                    self.cfg.server.port
+                     model id {1}.",
+                    self.cfg.server.port,
+                    self.cfg.model_id()
                 ));
             }
             Some(Err(e)) => {

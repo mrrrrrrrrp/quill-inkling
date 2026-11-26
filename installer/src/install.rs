@@ -48,7 +48,7 @@ pub fn run(o: &Options, rep: &dyn Reporter) -> Result<()> {
 
     rep.step("Checking disk space");
     let models_dir = dir.join("models");
-    let (models_total, mut models_missing) = if o.skip_models { (0, 0) } else { hf::plan_bytes(&http, &models_dir)? };
+    let (models_total, mut models_missing) = if o.skip_models { (0, 0) } else { hf::plan_bytes(&http, &models_dir, o.config.server.abliterated)? };
     if o.models_from.is_some() {
         models_missing = 0; // linked (same drive) or copied; the copy case is checked by the OS
     }
@@ -67,7 +67,7 @@ pub fn run(o: &Options, rep: &dyn Reporter) -> Result<()> {
     engine::install_cublas(&http, dir, matches!(o.engine, EngineSource::Source { .. }), rep)?;
 
     if !o.skip_models {
-        for m in release::MODELS {
+        for m in release::models(o.config.server.abliterated) {
             rep.step(&format!("Model files: {}", m.repo));
             hf::sync_repo(&http, m, &models_dir, o.models_from.as_deref(), rep)?;
         }

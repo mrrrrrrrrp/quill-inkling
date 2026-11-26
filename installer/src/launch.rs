@@ -78,7 +78,7 @@ fn run_in_console(dir: &Path, open_browser: bool) -> Result<()> {
     }
     println!("\n=================================================================================");
     println!(" Ready after {} s.   Chat: {url}", t0.elapsed().as_secs());
-    println!(" OpenAI-compatible API: {url}v1   (model id: inkling-2-mini-abliterated)");
+    println!(" OpenAI-compatible API: {url}v1   (model id: {})", cfg.model_id());
     println!(" Close this window to stop the server and free the GPU.");
     println!("=================================================================================\n");
     if open_browser {

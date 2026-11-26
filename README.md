@@ -16,6 +16,22 @@ on the CPU. It serves an **OpenAI-compatible API** and a **chat page** in your b
 A Windows installer, written in Rust, checks your hardware, picks the settings, downloads and verifies everything,
 and sets up a Start-menu launcher.
 
+## With or without abliteration
+
+| Installer | Model | API model id |
+|---|---|---|
+| `Inkling-Setup.exe` | abliterated (refusals removed) | `inkling-2-mini-abliterated` |
+| `Inkling-Setup-Original.exe` | the original model | `inkling-2-mini` |
+
+**For the model's original quality, choose `Inkling-Setup-Original.exe`:** abliteration can worsen overall model
+performance.
+
+Both are the same program; the second starts with "Remove refusals (abliteration)" unticked. To switch later, run
+the installer on the same folder, tick or untick the box and click **Update / repair**. On the command line:
+`inkling-cli install --abliteration off` (or `on`).
+
+The KL divergence figure above was measured with the abliterated model; the original model has not been measured.
+
 ## Confirmed setup
 
 This is the machine the engine was built and tuned on:
@@ -65,7 +81,7 @@ your machine.
 
 ## Install
 
-1. Download **`Inkling-Setup.exe`** from the [latest release](../../releases/latest) and run it. Windows SmartScreen
+1. Download **`Inkling-Setup-Original.exe`** or **`Inkling-Setup.exe`** ([which one?](#with-or-without-abliteration)) from the [latest release](../../releases/latest) and run it. Windows SmartScreen
    may warn about an unsigned program: click **More info → Run anyway**.
 2. The window shows your hardware, a verdict and the settings it picked. Choose a folder (default
    `%LOCALAPPDATA%\Inkling`) and click **Install**.
@@ -203,7 +219,7 @@ runs in FP32 on the CPU cores.
 ```powershell
 $env:QUILL_CUDA_ARCH = "89;120a"; engine\build.cmd "" build-release   # one engine binary for RTX 40 and RTX 50
 $env:INKLING_REPO = "<owner>/<repo>"; cargo build --release --manifest-path installer\Cargo.toml
-.\tools\package-release.ps1          # dist\: Inkling-Setup.exe, inkling-cli.exe, engine zip, SHA256SUMS.txt
+.\tools\package-release.ps1          # dist\: Inkling-Setup.exe, Inkling-Setup-Original.exe, inkling-cli.exe, engine zip, SHA256SUMS.txt
 ```
 
 Then attach the files in `dist\` to a GitHub release tagged `v<version>`. The version comes from
@@ -226,4 +242,4 @@ archives. Then set `CUDA_PATH` to that folder and `CUDACXX` to its `bin\nvcc.exe
 - `data/wikitext2_test_head.txt` is an excerpt of WikiText-2 (Merity et al., 2016), CC BY-SA 3.0.
 - Everything else in this repository is under the [Apache License 2.0](LICENSE).
 
-The model is abliterated, which means its refusals are removed. You are responsible for how you use it.
+By default the model is abliterated, which means its refusals are removed. You are responsible for how you use it.

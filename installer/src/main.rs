@@ -95,6 +95,9 @@ struct InstallArgs {
     vision: Option<String>,
     #[arg(long)]
     port: Option<u16>,
+    /// remove refusals: on or off (default: on; off for Inkling-Setup-Original.exe)
+    #[arg(long, value_parser = ["on", "off"])]
+    abliteration: Option<String>,
     /// server environment variable KEY=VALUE (repeatable), e.g. QUILL_ASSIST=0.2
     #[arg(long = "env", value_name = "KEY=VALUE")]
     env: Vec<String>,
@@ -127,6 +130,10 @@ struct InstallArgs {
 
 fn exe_dir() -> Option<PathBuf> {
     std::env::current_exe().ok()?.parent().map(Path::to_path_buf)
+}
+
+fn is_original_setup(exe: &Path) -> bool {
+    exe.file_stem().is_some_and(|n| n.to_string_lossy().to_ascii_lowercase().contains("setup-original"))
 }
 
 fn installed_here() -> Option<PathBuf> {
@@ -284,6 +291,9 @@ fn install_cli(a: InstallArgs) -> anyhow::Result<()> {
             _ => anyhow::bail!("--vision must be cpu, gpu or off"),
         };
     }
+    if let Some(v) = &a.abliteration {
+        s.abliterated = v == "on";
+    }
     for kv in &a.env {
         let (k, v) = kv.split_once('=').ok_or_else(|| anyhow::anyhow!("--env expects KEY=VALUE, got {kv}"))?;
         cfg.env.insert(k.trim().into(), v.trim().into());
@@ -317,6 +327,10 @@ fn install_cli(a: InstallArgs) -> anyhow::Result<()> {
 /// The settings to start from: the existing inkling.toml (keeps [env] and extra_args), else the recommendation.
 pub fn base_config(dir: &Path, hw: &hw::Hardware, a: &plan::Assessment) -> Config {
     let mut cfg = Config::load(dir).unwrap_or_else(|_| Config { server: a.settings.clone(), ..Config::default() });
+    // Inkling-Setup-Original.exe: the same installer, with the abliteration off
+    if std::env::current_exe().is_ok_and(|p| is_original_setup(&p)) {
+        cfg.server.abliterated = false;
+    }
     if let Some(g) = &a.gpu {
         cfg.install.gpu = format!("{} ({:.1} GB, {})", g.name, g.vram_gib(), g.sm());
         if hw.gpus.len() > 1 {
