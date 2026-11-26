@@ -1,11 +1,13 @@
 ## New in v0.1.2
 
+- **Faster:** about **10% faster decode** in the author's everyday use. The controlled A/B runs were too noisy to
+  confirm the figure or to say which change it comes from.
 - **Chat page:** the live tok/s figure is more accurate. It read about 6–7% low, and lower early in a reply. This
-  changes the display, not the decode speed.
+  changes the display, not the decode speed, so don't compare its figures with the old counter's.
 - **Chat page:** streaming replies repaint at most about 12 times a second, to take less GPU time from the model.
 - **Engine, on by default:** non-temporal loads in the CPU expert tier (`QUILL_NT_STREAM=0` turns it off) and a
   higher Windows GPU scheduling priority (`QUILL_GPU_PRIORITY=0` turns it off). Neither changes the model's output
-  math, and **no speed gain has been measured yet**: the test runs were too noisy.
+  math.
 - **For tuning:** a routing trace (`QUILL_TIER_TRACE`), an offline simulator, and the results of the speed ideas
   tested so far in [`bench/FINDINGS.md`](https://github.com/mrrrrrrrrp/quill-inkling/blob/main/bench/FINDINGS.md).
 

@@ -1,8 +1,9 @@
 # Speed findings, 2026-11-26
 
 What was tried to make decode faster on the reference machine (RTX 4070 SUPER 12 GB, Ryzen 7 5800X3D,
-32 GB DDR4-3000), and what came of it. The short version: **no end-to-end speed gain has been measured.** Two
-changes ship on by default in v0.1.2, but their A/B runs were drowned out by desktop noise.
+32 GB DDR4-3000), and what came of it. The short version: two changes ship on by default in v0.1.2. The author
+sees about **10% faster decode** in everyday use, but their A/B runs were drowned out by desktop noise, so the
+controlled tests neither confirm that figure nor say which change it comes from.
 
 The measurements come from one teacher-forced trace: 12 prompts, 4,463 speculative rounds, 9,210 tokens. "Item N"
 in `trace_sim*.py` and `ntbench.cpp` refers to the numbers in the first column.
@@ -15,9 +16,9 @@ in `trace_sim*.py` and `ntbench.cpp` refers to the numbers in the first column.
 | 1 | Cut verify rows that would miss the GPU's experts | **Rejected** | Even a perfect choice saves 1.0% of wall time: the 8 verify rows are nearby drafts and share nearly all their top-8 experts |
 | 2a | Score residency by the union of experts per round | **Rejected** | 3.9% fewer misses in the model, 0.7% with real accounting |
 | 2b | Repack all resident experts when idle | **Rejected** | The repack itself contributes about nothing. A better *ranking* would matter, not the repack |
-| 3 | Non-temporal loads, so loop passes 2 and 3 re-read experts from L3 | **Shipped, unproven** | Microbenchmark: a 60 MB set stays readable at 151 GB/s after 300 MB of streaming (+238%). 46% of loop pass 2/3 misses are re-reads. End to end: off 91.4, on 86.8, off 103.7 tok/s, so no verdict |
+| 3 | Non-temporal loads, so loop passes 2 and 3 re-read experts from L3 | **Shipped, A/B inconclusive** | Microbenchmark: a 60 MB set stays readable at 151 GB/s after 300 MB of streaming (+238%). 46% of loop pass 2/3 misses are re-reads. End to end: off 91.4, on 86.8, off 103.7 tok/s, so no verdict |
 | 4 | Place expert pages in faster RAM address ranges | **Rejected** | A 12 GiB scan reads 29.7–33.3 GB/s in every band. There is no slow range to avoid |
-| 5 | Higher GPU scheduling priority than the desktop | **Shipped, unproven** | 83.4, 85.3 and 95.9 tok/s across the three runs: no verdict |
+| 5 | Higher GPU scheduling priority than the desktop | **Shipped, A/B inconclusive** | 83.4, 85.3 and 95.9 tok/s across the three runs: no verdict |
 | 6 | Reclaim wasted VRAM | **Nothing to reclaim** | Expert slots have no padding and the build already targets only the card's architecture. Closing other GPU apps still helps: about +2.5% per 100 MiB freed |
 | 14 | Precompute part of the drafter's input during idle time | **Possible** | The input is one linear layer. Estimated 1–3% |
 | 16 | Is the drafter's confidence calibrated? | **Yes** | Below 0.5 confidence 17–29% of drafts are accepted, at 0.9 and above 91–95% |
@@ -43,7 +44,7 @@ decodes.
 
 ## Next
 
-1. Repeat the two unproven A/Bs on a quiet desktop, then keep or revert them.
+1. Repeat the two inconclusive A/Bs on a quiet desktop, then keep or revert them.
 2. Prefetch experts for the next loop pass into the GPU during the idle windows (estimated +3–4%).
 3. Measure drafter acceptance with and without the abliteration.
 4. Find the cause of the teacher-forced nondeterminism.

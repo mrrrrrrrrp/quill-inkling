@@ -220,7 +220,7 @@ starting. An RTX 3090's 24 GB would hold every expert, so the CPU-tier caveats a
 - **AVX-512 is unexplored** and could help the int8 dots (`src/model/cpu_tier.cpp`).
 - **Cache:** the reference CPU has a 96 MB L3 (X3D). Prefetching predicted misses into L3 was rejected: only 5.4% of
   accesses would have hit. Smaller caches should matter little for that result.
-- **`QUILL_NT_STREAM`** was designed around that 96 MB L3 and has no proven gain even there. On another CPU, A/B it
+- **`QUILL_NT_STREAM`** was designed around that 96 MB L3 and its A/B was inconclusive even there. On another CPU, A/B it
   with `=0` (§6).
 
 ### Linux
@@ -278,8 +278,8 @@ Engine switches, the `QUILL_*` environment variables (defaults in bold):
 | `QUILL_ATTN_SMMA`, `QUILL_ATTN_FMMA` | **1** | Tensor-core sliding and full attention |
 | `QUILL_STEP_PREFILL` | **48** | Prompts up to N new tokens are prefilled through the decode graphs |
 | `QUILL_RES_DECAY`, `QUILL_RES_MARGIN` | 0.96, 1.25 | Adaptive residency: count decay and swap margin |
-| `QUILL_NT_STREAM` | **1** | Non-temporal hints on CPU-tier loads that are not re-read, so loop passes 2/3 can hit L3. Lossless. Gain unproven (`bench/FINDINGS.md`). |
-| `QUILL_GPU_PRIORITY` | **1** | Windows GPU scheduling class HIGH, ahead of the desktop. No admin needed. Gain unproven. |
+| `QUILL_NT_STREAM` | **1** | Non-temporal hints on CPU-tier loads that are not re-read, so loop passes 2/3 can hit L3. Lossless. A/B inconclusive (`bench/FINDINGS.md`). |
+| `QUILL_GPU_PRIORITY` | **1** | Windows GPU scheduling class HIGH, ahead of the desktop. No admin needed. A/B inconclusive. |
 | `QUILL_NO_DYN_VRAM` | unset | Disables dynamic VRAM (static region) |
 | `QUILL_TIER_TRACE=file`, `QUILL_JOIN_DBG=1`, `QUILL_ATTN_DBG=1` | | Diagnostics |
 
