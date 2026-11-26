@@ -36,7 +36,8 @@ These are the project's own requirements. Keep them unless the user explicitly s
 4. **VRAM is counted for all processes**, as Task Manager and NVML/`nvidia-smi` show it.
    - `cudaMemGetInfo` reads up to ~650 MiB low under Windows WDDM. Do not size anything with it.
 5. **Check what was already tried.** `engine/HISTORY.txt` holds the engine's commit messages, with the measured
-   numbers of every kept change. `bench/rp_results.txt` holds the reference machine's benchmark history.
+   numbers of every kept change. `bench/rp_results.txt` holds the reference machine's benchmark history, and
+   `bench/FINDINGS.md` the speed ideas that were measured and rejected, or are still unproven.
 6. **Don't benchmark while the user is chatting with the model.** A benchmark loads the model on the same GPU.
    Ask first.
 
@@ -218,7 +219,9 @@ starting. An RTX 3090's 24 GB would hold every expert, so the CPU-tier caveats a
 - **AVX2 is required.** The engine is compiled with `/arch:AVX2`, and the tier uses AVX2 intrinsics.
 - **AVX-512 is unexplored** and could help the int8 dots (`src/model/cpu_tier.cpp`).
 - **Cache:** the reference CPU has a 96 MB L3 (X3D). Prefetching predicted misses into L3 was rejected: only 5.4% of
-  accesses would have hit. Smaller caches should matter little.
+  accesses would have hit. Smaller caches should matter little for that result.
+- **`QUILL_NT_STREAM`** was designed around that 96 MB L3 and has no proven gain even there. On another CPU, A/B it
+  with `=0` (§6).
 
 ### Linux
 - **The installer is Windows-only.**
@@ -332,6 +335,8 @@ Results are appended to `bench/rp_results.txt`. The reference machine's history 
 
 To judge an idea before building it, record a trace with `-Env @{QUILL_TIER_TRACE="<file>"}` and replay it offline
 with `bench/trace_sim.py` or `bench/trace_sim_res.py`. `bench/FINDINGS.md` lists what has already been tried.
+The simulators assume 3 loop passes, and their default budget of 1,788 resident experts is the reference
+machine's: pass your own `N resident` as the last argument.
 
 For long context, copy `rp.ps1` and point its `--forced` at `replay_long.jsonl` (a 22k-token code prompt). For
 prefill, use `ab.ps1 -Label x -Extra "--long-prompt","32768"`.
