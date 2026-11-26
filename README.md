@@ -32,9 +32,9 @@ Results on it, at temperature 1 with DFlash2:
 
 | | |
 |---|---|
-| Decode, chat and code | **100+ tok/s**: ~120 median on a 12-prompt replay set, 105–150 depending on content |
-| Decode at 22k context chat | ~89 tok/s |
-| Decode with a ~300k-token chat (code) | ~100 tok/s |
+| Decode, chat and code | **100+ tok/s**: ~120 median on a 12-prompt replay set, 105–160 depending on content |
+| Decode at 22k context chat | ~110 tok/s |
+| Decode with a ~300k-token chat (code) | ~80-120 tok/s |
 | Context window | **600k tokens** (600,064), q4 KV cache |
 | Prefill | ~2,200 tok/s (32k-token prompt) |
 | Quality | mean KLD 0.0071 vs the BF16 model (WikiText-2, 2 × 1,024 tokens): lower than Unsloth's UD-Q4_K_XL (0.0107)[¹](#quality-note) |
