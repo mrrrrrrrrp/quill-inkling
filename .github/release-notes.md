@@ -1,3 +1,19 @@
+## New in v0.1.2
+
+- **Chat page:** the live tok/s figure is more accurate. It read about 6–7% low, and lower early in a reply. This
+  changes the display, not the decode speed.
+- **Chat page:** streaming replies repaint at most about 12 times a second, to take less GPU time from the model.
+- **Engine, on by default:** non-temporal loads in the CPU expert tier (`QUILL_NT_STREAM=0` turns it off) and a
+  higher Windows GPU scheduling priority (`QUILL_GPU_PRIORITY=0` turns it off). Neither changes the model's output
+  math, and **no speed gain has been measured yet**: the test runs were too noisy.
+- **For tuning:** a routing trace (`QUILL_TIER_TRACE`), an offline simulator, and the results of the speed ideas
+  tested so far in [`bench/FINDINGS.md`](https://github.com/mrrrrrrrrp/quill-inkling/blob/main/bench/FINDINGS.md).
+
+**Updating:** close the Inkling server window, run the new `Inkling-Setup.exe`, keep the same folder and click
+**Update / repair**. Downloaded models are kept.
+
+---
+
 **Inkling 2 Mini, local, on Windows + NVIDIA.** Confirmed on an RTX 40 with 12 GB + 32 GB RAM: 100+ tok/s decode,
 600k context.
 

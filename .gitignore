@@ -14,3 +14,8 @@ bin/
 bench/*.log
 bench/*.log.*
 bench/kld/*.bin
+bench/trace*.txt
+bench/*.pkl
+bench/ntbench.exe
+bench/ntbench.obj
+bench/*.csv

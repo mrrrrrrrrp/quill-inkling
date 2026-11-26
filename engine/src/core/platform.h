@@ -66,6 +66,17 @@ inline void* page_alloc(std::size_t bytes) { return VirtualAlloc(nullptr, bytes,
 inline void page_free(void* p, std::size_t) {
     if (p) VirtualFree(p, 0, MEM_RELEASE);
 }
+
+// quill: D3DKMTSetProcessSchedulingPriorityClass(GetCurrentProcess(), cls) (gdi32, dynamic load; no admin
+// below Realtime). cls: 3 AboveNormal, 4 High. Lifts the engine's CUDA context ahead of the desktop's own
+// GPU users (dwm, the browser), the GPU-side counterpart of the launcher's process priority High.
+inline bool set_gpu_scheduling_priority(int cls) {
+    using Fn = long(__stdcall*)(void*, int);
+    const HMODULE g = GetModuleHandleW(L"gdi32.dll");
+    if (!g) return false;
+    const auto fn = reinterpret_cast<Fn>(GetProcAddress(g, "D3DKMTSetProcessSchedulingPriorityClass"));
+    return fn && fn(GetCurrentProcess(), cls) == 0;  // NTSTATUS 0 = success
+}
 #else
 using FileHandle = int;
 inline const FileHandle kInvalidFile = -1;

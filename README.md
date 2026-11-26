@@ -194,7 +194,7 @@ runs in FP32 on the CPU cores.
 | `installer/` | The installer and launcher (Rust): `cargo build --release` gives `inkling.exe` |
 | `engine/` | quill (C++20/CUDA 13): `engine\build.cmd 89` builds it with Visual Studio 2022 |
 | `app/chat.html` | The chat page the server serves at `/` |
-| `bench/` | Benchmark scripts, replay sets, results |
+| `bench/` | Benchmark scripts, replay sets, trace simulator, results. [`FINDINGS.md`](bench/FINDINGS.md): speed ideas already tested |
 | `data/` | WikiText-2 excerpt for the quality (KLD) check |
 | `models/PINS.txt` | Pinned Hugging Face revisions of the three model repositories |
 

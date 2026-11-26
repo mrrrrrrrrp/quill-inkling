@@ -4,9 +4,11 @@
 
 #include "core/device.h"
 #include "kernels/draft/draft.h"
+#include "model/cpu_tier.h"
 #include "model/model_kernels.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
 
@@ -206,6 +208,15 @@ void SpecLoop::generate(std::int32_t token, int max_new_tokens, const Sampling& 
     CUDA_CHECK(cudaEventSynchronize(done_));  // the round's only host synchronisation
     VerifyRecord r;
     std::memcpy(&r, record, sizeof r);
+    if (std::FILE* tf = rt_.cpu_tier()->trace_file()) {  // quill diagnostics (0a): the round's routing + outcome
+      rt_.dump_visit_trace(tf);
+      const long long now = std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now().time_since_epoch()).count();
+      std::fprintf(tf, "R %d %d %lld %.3f %.3f %.3f %.3f %.3f %.3f %.3f\n", r.m, r.accepted, now - last_trace_us_,
+                   r.conf[0], r.conf[1], r.conf[2], r.conf[3], r.conf[4], r.conf[5], r.conf[6]);
+      last_trace_us_ = now;
+      if ((rounds & 63) == 0) std::fflush(tf);  // bound the loss if a run is killed
+    }
     if (std::getenv("QUILL_SPEC_DEBUG") && rounds < 16) {  // quill diagnostics
       float conf[7];
       CUDA_CHECK(cudaMemcpy(conf, draft_.conf, sizeof conf, cudaMemcpyDeviceToHost));

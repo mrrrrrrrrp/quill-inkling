@@ -73,6 +73,9 @@ class CpuTier {
   std::uint64_t calls() const { return calls_.load(); }
   std::uint64_t entries() const { return entries_.load(); }
   double busy_seconds() const { return busy_ns_.load() * 1e-9; }
+  // quill diagnostics: the QUILL_TIER_TRACE file (worker 0 writes the "C" call lines; SpecLoop appends the
+  // round's "V" routing lines and the "R" round line through the same handle)
+  std::FILE* trace_file() const { return trace_; }
 
  private:
   void worker(int id);
@@ -82,6 +85,7 @@ class CpuTier {
   std::vector<float> rb_;
   int pred_mode_ = 0;  // QUILL_PREFETCH: 0 off, 1 hints traced, 2 hints prefetched
   int pf_max_ = 128;   // QUILL_PF_MAX: experts prefetched per prediction (highest scores first)
+  bool nt_stream_ = true;  // quill: non-temporal hints for never-reused tier loads (QUILL_NT_STREAM=0 off)
   alignas(64) float pkey_[8][128];
   std::atomic<std::uint64_t> pf_bytes_{0}, pf_hints_{0}, pf_runs_{0}, pf_ns_{0};
 

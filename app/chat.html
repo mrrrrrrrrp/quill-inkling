@@ -16,7 +16,7 @@
          display: grid; grid-template-columns: 1fr 330px; }
   main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
   #log { flex: 1; overflow-y: auto; padding: 24px 0 12px; }
-  .msg { max-width: 860px; margin: 0 auto 18px; padding: 0 24px; }
+  .msg { max-width: 860px; margin: 0 auto 18px; padding: 0 24px; contain: content; }
   .bubble { padding: 12px 16px; border-radius: 12px; overflow-wrap: anywhere; }
   .user .bubble { background: var(--user); margin-left: 15%; white-space: pre-wrap; }
   .assistant .bubble { background: transparent; padding-left: 0; padding-right: 0; }
@@ -156,6 +156,19 @@ const STORE = "inkling-chat-v1";
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 0) => (n == null || !isFinite(n)) ? "–" : Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 
+// live tok/s estimates characters -> tokens: this model streams ~3.56 chars/token (measured on the
+// recorded replay set); after each reply the server's own completion_tokens refines the value (stored).
+function charsPerToken() {
+  const v = Number(localStorage.getItem("inkling-cpt"));
+  return v >= 2 && v <= 8 ? v : 3.56;
+}
+function learnCharsPerToken(chars, tokens) {
+  if (!(tokens >= 64) || chars <= 0) return;  // a short reply says little
+  const c = chars / tokens;
+  if (c < 2 || c > 8) return;  // tool calls / odd formats should not move it
+  localStorage.setItem("inkling-cpt", (0.7 * charsPerToken() + 0.3 * c).toFixed(3));
+}
+
 let state = load();
 let maxCtx = null, busy = false, controller = null;
 let attachments = [];  // image data URLs waiting for the next message
@@ -258,6 +271,25 @@ function fillAssistant(div, m, live) {
   b.classList.toggle("cursor", live);
   div.querySelector(".meta").innerHTML = metaLine(m.timings);
   div.querySelector(".err").textContent = m.error || "";
+}
+// streaming paint: markdown is re-parsed only up to the message's last blank line (finished paragraphs);
+// the growing tail is appended as escaped text, so a token batch never re-renders the whole message
+function fillAssistantLive(div, m) {
+  const det = div.querySelector("details");
+  det.hidden = !m.reasoning;
+  if (m.reasoning) {
+    const tb = det.querySelector(".tbody");
+    tb.textContent = m.reasoning;
+    const secs = m.thinkMs != null ? ` · ${fmt(m.thinkMs / 1000, 1)} s` : "";
+    det.querySelector("summary").textContent = (m.content ? "Reasoning" : "Thinking…") + secs;
+    if (!m.content) { det.open = true; tb.scrollTop = tb.scrollHeight; }
+  }
+  const b = div.querySelector(".bubble");
+  const body = m.content || "";
+  const cut = body.lastIndexOf("\n\n");
+  const head = cut >= 0 ? md(body.slice(0, cut + 2)) : "";
+  const tail = cut >= 0 ? body.slice(cut + 2) : body;
+  b.innerHTML = head + (tail ? `<p>${esc(tail)}</p>` : "");
 }
 function renderAll() {
   const log = $("log");
@@ -365,25 +397,45 @@ async function send(text) {
   controller = new AbortController();
   setBusy(true);
   const t0 = performance.now();
-  let tFirst = null, tAnswer = null, chars = 0, pending = false;
+  let tFirst = null, tAnswer = null, chars = 0;
+  const cpt = charsPerToken();  // this reply's live estimate, calibrated by the previous ones
+  const samples = [];          // {t, chars} points of the running stream, for the windowed live rate
   const phase = $("phase");
   const tick = setInterval(() => {
     const el = (performance.now() - t0) / 1000;
     if (tFirst == null) phase.textContent = `prefill… ${fmt(el, 1)} s`;
     else {
-      const rate = chars / 3.8 / Math.max(0.05, (performance.now() - tFirst) / 1000);
+      // rate over the last ~2 s once the stream is that old (the reply's cold start - the expert pool
+      // warming after the prefill - otherwise drags a from-the-top average below the steady rate);
+      // the from-the-first-token average only fills in until then
+      const now = performance.now();
+      samples.push({ t: now, chars });
+      while (samples.length > 2 && now - samples[0].t > 2500) samples.shift();
+      const a = samples[0];
+      const rate = now - a.t > 2000
+          ? (chars - a.chars) / cpt / ((now - a.t) / 1000)
+          : chars / cpt / Math.max(0.05, (now - tFirst) / 1000);
       phase.textContent = `${m.content ? "answering" : "thinking"}… ${fmt(el, 1)} s · ≈${fmt(rate)} tok/s live`;
     }
   }, 200);
+  // streaming repaints batched to ~12 Hz (one paint per token batch forced the desktop compositor to share
+  // the GPU with the decode's sync-heavy kernel stream)
+  const PAINT_MS = 80;
+  let nextPaint = 0, paintScheduled = false, paintTimer = null;
+  const paint = () => {
+    paintScheduled = false, paintTimer = null;
+    nextPaint = performance.now() + PAINT_MS;
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    fillAssistantLive(div, m);
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  };
   const redraw = () => {
-    if (pending) return;
-    pending = true;
-    requestAnimationFrame(() => {
-      pending = false;
-      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
-      fillAssistant(div, m, true);
-      if (atBottom) log.scrollTop = log.scrollHeight;
-    });
+    if (paintScheduled) return;
+    paintScheduled = true;
+    const go = () => requestAnimationFrame(paint);
+    const wait = nextPaint - performance.now();
+    paintTimer = wait > 0 ? setTimeout(go, wait) : null;
+    if (wait <= 0) go();
   };
 
   try {
@@ -431,6 +483,7 @@ async function send(text) {
     m.error = e.name === "AbortError" ? "stopped" : String(e.message || e);
   } finally {
     clearInterval(tick);
+    clearTimeout(paintTimer), paintScheduled = false;  // the last paint below renders the full markdown once
     phase.textContent = "";
     controller = null;
     setBusy(false);
@@ -440,6 +493,8 @@ async function send(text) {
       state.session.tokens += m.timings.generated_tokens || 0;
       state.session.decodeMs += m.timings.decode_ms || 0;
     }
+    if (m.usage && m.usage.completion_tokens)
+      learnCharsPerToken(chars, m.usage.completion_tokens);  // next live estimate rides on real counts
     save();
     fillAssistant(div, m, false);
     const det = div.querySelector("details");

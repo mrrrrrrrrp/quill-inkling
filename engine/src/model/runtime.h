@@ -68,11 +68,14 @@ class Decoder {
                   unsigned char* assist_flags = nullptr) {
     hx_ = ex, hctl_ = ctl, hroute_ = route_counts, assist_flags_ = assist_flags;
   }
+  // quill diagnostics (QUILL_TIER_TRACE): device record of every visit's routing ([num_visits][VTRACE_INTS])
+  void set_visit_trace(int* records) { vtrace_ = records; }
 
  private:
   kernels::moe::HybridExchange hx_{};
   unsigned* hctl_ = nullptr;
   unsigned* hroute_ = nullptr;
+  int* vtrace_ = nullptr;               // quill: visit routing records ([num_visits][VTRACE_INTS]), null: off
   unsigned char* assist_flags_ = nullptr;  // quill: GPU zero-copy assist flags [128], null: off
   cudaStream_t pf_stream_ = nullptr;       // quill: L2 prefetch side stream (QUILL_L2PF)
   cudaEvent_t pf_fork_ = nullptr, pf_join_ = nullptr;
@@ -221,6 +224,9 @@ class Runtime {
   void scratch_acquire();
   void scratch_release();
   std::uint64_t residency_swaps() const;
+  // quill diagnostics (QUILL_TIER_TRACE): copies the visited rounds' routing records to the host and writes
+  // one "V visit layer n M <pairs...>" line per visit into `f` (called after the round's host sync)
+  void dump_visit_trace(std::FILE* f);
   // quill: device memory in use by every process (cudaMemGetInfo) and the cap
   static std::size_t device_used_bytes();
 
@@ -232,6 +238,7 @@ class Runtime {
   RuntimeOptions options_;
   std::unique_ptr<CpuTier> cpu_;
   DeviceBuffer moe_ctl_, route_counts_;
+  DeviceBuffer visit_trace_;               // quill: [num_visits][VTRACE_INTS] routing records (QUILL_TIER_TRACE)
   DeviceBuffer region_;   // quill: shared KV/expert region (plain allocation)
   DeviceBuffer assist_flags_;  // quill: GPU zero-copy assist flags
   std::unique_ptr<class VmmRegion> vmm_;  // quill: or re-mappable chunks (dynamic_vram)

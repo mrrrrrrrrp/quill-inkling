@@ -275,6 +275,8 @@ Engine switches, the `QUILL_*` environment variables (defaults in bold):
 | `QUILL_ATTN_SMMA`, `QUILL_ATTN_FMMA` | **1** | Tensor-core sliding and full attention |
 | `QUILL_STEP_PREFILL` | **48** | Prompts up to N new tokens are prefilled through the decode graphs |
 | `QUILL_RES_DECAY`, `QUILL_RES_MARGIN` | 0.96, 1.25 | Adaptive residency: count decay and swap margin |
+| `QUILL_NT_STREAM` | **1** | Non-temporal hints on CPU-tier loads that are not re-read, so loop passes 2/3 can hit L3. Lossless. Gain unproven (`bench/FINDINGS.md`). |
+| `QUILL_GPU_PRIORITY` | **1** | Windows GPU scheduling class HIGH, ahead of the desktop. No admin needed. Gain unproven. |
 | `QUILL_NO_DYN_VRAM` | unset | Disables dynamic VRAM (static region) |
 | `QUILL_TIER_TRACE=file`, `QUILL_JOIN_DBG=1`, `QUILL_ATTN_DBG=1` | | Diagnostics |
 
@@ -327,6 +329,9 @@ cd bench
 ```
 
 Results are appended to `bench/rp_results.txt`. The reference machine's history is already in that file.
+
+To judge an idea before building it, record a trace with `-Env @{QUILL_TIER_TRACE="<file>"}` and replay it offline
+with `bench/trace_sim.py` or `bench/trace_sim_res.py`. `bench/FINDINGS.md` lists what has already been tried.
 
 For long context, copy `rp.ps1` and point its `--forced` at `replay_long.jsonl` (a 22k-token code prompt). For
 prefill, use `ab.ps1 -Label x -Extra "--long-prompt","32768"`.

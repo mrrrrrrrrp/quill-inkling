@@ -595,7 +595,8 @@ __global__ void __launch_bounds__(256) moe_dispatch_kernel(const int* __restrict
                                                          unsigned char* __restrict__ assist, float* __restrict__ wts,
                                                          const __nv_bfloat16* __restrict__ x, int M, int layer,
                                                          HybridExchange ex, unsigned* __restrict__ ctl,
-                                                         unsigned* __restrict__ route_counts, int visit) {
+                                                         unsigned* __restrict__ route_counts, int visit,
+                                                         int* __restrict__ vtrace) {
     __shared__ int n_s;
     __shared__ int ent_slot[64], ent_exp[64];
     const int t = threadIdx.x;
@@ -659,6 +660,13 @@ __global__ void __launch_bounds__(256) moe_dispatch_kernel(const int* __restrict
     }
     __syncthreads();
     const int n = n_s;
+    if (vtrace) {  // quill diagnostics (QUILL_TIER_TRACE): every (row, k) slot's expert and residency
+        if (t == 0) vtrace[0] = layer, vtrace[1] = n, vtrace[2] = M, vtrace[3] = visit;
+        for (int i = t; i < M * TOPK; i += blockDim.x) {
+            const int e = idx[i];
+            vtrace[4 + i] = (e << 1) | (slot_map[e] >= 0 ? 1 : 0);
+        }
+    }
     if (n == 0) {
         if (t == 0) ctl[1] = 0;
         return;
@@ -826,7 +834,7 @@ void hybrid_moe(const HybridArgs& a, cudaStream_t stream) {
     HostAssist hu = a.host_up, hd = a.host_down;
     hu.flags = hd.flags = assist ? a.assist : nullptr;
     moe_dispatch_kernel<<<1, 256, 0, stream>>>(a.idx, a.slot_map, assist ? a.assist : nullptr, const_cast<float*>(a.wts),
-                                               a.x, a.M, a.layer, a.ex, a.ctl, a.route_counts, a.visit);
+                                               a.x, a.M, a.layer, a.ex, a.ctl, a.route_counts, a.visit, a.vtrace);
     const dim3 grid(2 * I / TILE, a.M * TOPK);
     launch(nv ? moe_up_kernel<0> : moe_up_kernel<1>, grid, UP_WARPS * 32, false, stream, a.x, a.idx,
            static_cast<const uint8_t*>(a.w13), static_cast<const uint8_t*>(a.w13_scale), nv ? a.w13_factor : nullptr,

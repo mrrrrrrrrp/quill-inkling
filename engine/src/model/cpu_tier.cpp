@@ -239,6 +239,17 @@ inline float act_fn(float g, float u) {  // bf16 inputs; softcap(g,4) sigmoid(g)
   return bf16r(a);
 }
 
+// quill (SPEEDUP-IDEAS item 3): a loop layer's pass-2/3 misses re-read the expert pass 1 / 2 already
+// streamed 12 visits earlier (46% of them, measured). Keeping those first loads L3-resident and streaming
+// everything that nothing re-reads (layers 0-5 / 18-23, pass-3 loads) with a non-temporal hint lets the
+// re-reads come from the 96 MB L3 instead of DRAM. Measured on this 5800X3D (bench/ntbench.cpp): a
+// PREFETCHNTA every 64 B keeps a 60 MB keep-set readable at 151 GB/s after 300 MB of streaming (+238% vs
+// plain loads) while the stream itself stays at full DRAM rate. QUILL_NT_STREAM=0 disables.
+__forceinline void nt_stream(const void* p, std::size_t bytes) {
+  const char* q = static_cast<const char*>(p);
+  for (std::size_t o = 0; o != bytes; o += 64) _mm_prefetch(q + o, _MM_HINT_NTA);
+}
+
 struct Unique {
   int expert;
   int n;                 // entries using it
@@ -277,6 +288,7 @@ CpuTier::CpuTier(const ExpertStore& store, int threads)
   if (std::getenv("QUILL_TIER_PHASES")) phase_ns_ = new std::uint64_t[5]{};
   if (const char* pm = std::getenv("QUILL_PREFETCH")) pred_mode_ = std::atoi(pm);
   if (const char* pm = std::getenv("QUILL_PF_MAX")) pf_max_ = std::atoi(pm);
+  nt_stream_ = !(std::getenv("QUILL_NT_STREAM") && std::atoi(std::getenv("QUILL_NT_STREAM")) == 0);
   (void)luts();
   if (std::getenv("QUILL_JOIN_DBG")) kernels::moe::join_debug(true, false);
   for (int i = 0; i < nthreads_; ++i) threads_.emplace_back([this, i] { worker(i); });
@@ -445,6 +457,9 @@ void CpuTier::run_request(int id, const CpuRequest& rq) {
   const auto t0 = std::chrono::steady_clock::now();
   const int layer = rq.layer, M = rq.M, n = rq.n, visit = rq.visit;
   const std::uint32_t seq = rq.seq;
+  // quill: only the loop layers' pass-1/2 loads are re-read (12 visits later); they stay L3-allocating,
+  // every other load streams non-temporally so it cannot evict them
+  const bool keep_l3 = !nt_stream_ || (visit >= 0 && is_loop_layer(layer) && visit_at(visit).pass < 3);
   const HostLayerExperts& h = store_.host(layer);
   const bool nv = h.fmt == ExpertFormat::NVFP4;
   const ExpertBytes eb = expert_bytes(h.fmt);
@@ -498,6 +513,7 @@ void CpuTier::run_request(int id, const CpuRequest& rq) {
       const int i = it % INTER;
       const auto* codes = reinterpret_cast<const std::uint8_t*>(h.expert_w13(q.expert));
       const auto* scales = reinterpret_cast<const std::uint8_t*>(h.expert_w13s(q.expert));
+      if (!keep_l3) nt_stream(codes + (2 * i) * crow, 2 * crow);
       const float* xs[8];
       for (int t = 0; t < q.n; ++t) xs[t] = &xf_[std::size_t(q.token[t]) * HIDDEN];
       float g[8], u[8];
@@ -550,6 +566,7 @@ void CpuTier::run_request(int id, const CpuRequest& rq) {
       const int r = it % HIDDEN;
       const auto* codes = reinterpret_cast<const std::uint8_t*>(h.expert_w2(q.expert));
       const auto* scales = reinterpret_cast<const std::uint8_t*>(h.expert_w2s(q.expert));
+      if (!keep_l3) nt_stream(codes + r * crow, crow);
       const float* xs[8];
       for (int t = 0; t < q.n; ++t) xs[t] = &act_[std::size_t(q.entry[t]) * INTER];
       float y[8];

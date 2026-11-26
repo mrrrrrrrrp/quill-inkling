@@ -70,6 +70,7 @@ class SpecLoop {
   };
   AcceptKey accept_key_{};
   cudaEvent_t done_ = nullptr;
+  long long last_trace_us_ = 0;  // quill diagnostics: wall us between R lines (QUILL_TIER_TRACE)
 };
 
 }  // namespace ingine::model

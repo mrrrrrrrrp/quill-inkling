@@ -4,6 +4,7 @@
 #include "model/runtime.h"
 
 #include "core/device.h"
+#include "core/platform.h"
 #include "model/cpu_tier.h"
 #include "model/experts.h"
 #include "model/vram_meter.h"
@@ -96,6 +97,12 @@ Runtime::Runtime(const RuntimeOptions& options, Weights weights, Ablation ablati
 
 void Runtime::init() {
   const RuntimeOptions& options = options_;
+  if (const char* e = std::getenv("QUILL_GPU_PRIORITY"); !e || std::atoi(e) > 0) {  // quill: WDDM priority class
+    if (platform::set_gpu_scheduling_priority(4))
+      spdlog::info("platform: WDDM GPU scheduling priority class HIGH (QUILL_GPU_PRIORITY=0 disables)");
+    else
+      spdlog::warn("platform: could not set the WDDM GPU scheduling priority class (desktop may preempt)");
+  }
   spdlog::info("loop passes: {}{} -> {} visits per token ({} full-attention, {} sliding); QUILL_PASSES sets it", passes(),
                passes() == TRAINED_PASSES ? " (as trained)" : " (checkpoint trained with 3)", num_visits(),
                num_full_visits(), num_sliding_visits());
@@ -275,6 +282,13 @@ void Runtime::finalize(std::size_t reserve_bytes) {
                    hx.assist_share * 100.0, hx.assist_min);
     }
     decoder_->set_hybrid(hx, static_cast<unsigned*>(moe_ctl_.p), static_cast<unsigned*>(route_counts_.p), aflags);
+    if (std::getenv("QUILL_TIER_TRACE")) {  // quill diagnostics: every visit's routing record on the device
+      visit_trace_ = DeviceBuffer(std::size_t(num_visits()) * kernels::moe::VTRACE_INTS * sizeof(int));
+      visit_trace_.fill(0);
+      decoder_->set_visit_trace(static_cast<int*>(visit_trace_.p));
+      spdlog::info("trace: visit routing records on the device ({} x {} ints)",
+                   num_visits(), kernels::moe::VTRACE_INTS);
+    }
   }
   vram_phase("pools + cpu tier");
   cpu_->activate();  // the eager warm-up of capture() runs the CPU tier
@@ -294,6 +308,21 @@ std::vector<std::uint32_t> Runtime::route_counts() {
   CUDA_CHECK(cudaStreamSynchronize(stream_));
   if (route_counts_.p) route_counts_.copy_to_host(c.data(), c.size() * 4);
   return c;
+}
+
+// quill diagnostics (QUILL_TIER_TRACE), called by SpecLoop after the round's host sync: the drafter may
+// still run on the stream (it never touches the records) and the next round's verify is enqueued only
+// after this returns, so the synchronous copy races nothing.
+void Runtime::dump_visit_trace(std::FILE* f) {
+  if (!visit_trace_.p || !f) return;
+  std::vector<int> rec(std::size_t(num_visits()) * kernels::moe::VTRACE_INTS);
+  CUDA_CHECK(cudaMemcpy(rec.data(), visit_trace_.p, rec.size() * sizeof(int), cudaMemcpyDeviceToHost));
+  for (int v = 0; v < num_visits(); ++v) {
+    const int* r = rec.data() + std::size_t(v) * kernels::moe::VTRACE_INTS;
+    std::fprintf(f, "V %d %d %d %d", v, r[0], r[1], r[2]);
+    for (int i = 0; i < r[2] * 8; ++i) std::fprintf(f, " %d", r[4 + i]);
+    std::fputc(10, f);
+  }
 }
 
 void Runtime::reset_route_counts() {

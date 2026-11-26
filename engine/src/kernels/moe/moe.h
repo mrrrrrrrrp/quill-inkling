@@ -94,10 +94,17 @@ struct HybridArgs {
   unsigned char* assist = nullptr;   // quill: device [128] flags (written by dispatch), null: no GPU assist
   HostAssist host_up, host_down;     // quill: this layer's host w13 / w2 arrays (flags set by hybrid_moe)
   int visit = -1;                    // quill: visit index, written to the request header (pre-gating hints)
+  // quill diagnostics (QUILL_TIER_TRACE): device record of this visit's full routing, [VTRACE_INTS] ints:
+  // {layer, n (CPU-tier entries), M, visit, then (expert << 1) | resident bit of every (row, k) slot in
+  // idx order, M * 8 values (the slots past M stay 0)}. Null when not tracing.
+  int* vtrace = nullptr;
   L2Prefetch pf;                     // quill: launched on pf_stream after moe_down (pf_event: the fork)
   cudaStream_t pf_stream = nullptr;
   cudaEvent_t pf_event = nullptr;
 };
+// quill diagnostics (QUILL_TIER_TRACE): ints per visit in the routing record HybridArgs.vtrace points to
+inline constexpr int VTRACE_INTS = 4 + 8 * 8;  // header (layer, n, M, visit) + M * 8 packed (row, k) slots
+
 // dispatch (CPU tier request) -> moe_up / moe_down over resident experts -> join (wait for the CPU tier) ->
 // weighted sum + post-MLP conv. Same results as moe_up + moe_down for any residency.
 void hybrid_moe(const HybridArgs& a, cudaStream_t stream);

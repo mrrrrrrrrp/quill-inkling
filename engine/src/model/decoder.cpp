@@ -268,6 +268,7 @@ void Decoder::decode(Buffers& b, const std::int64_t* pos, bool history, cudaStre
       }
       h.act = bf16m(b.act), h.y = f32m(b.ymoe);
       h.ex = hx_, h.ctl = hctl_, h.route_counts = hroute_;
+      h.vtrace = vtrace_ ? vtrace_ + std::size_t(v) * moe::VTRACE_INTS : nullptr;  // quill: routing records
       h.conv_w = f32p(layer.mlp_conv), h.conv_state = st.conv_mlp_at(v), h.out = f32m(b.y2);
       h.conv_hist = history ? f32m(b.hist_mlp) + std::size_t(v) * m * H : nullptr;
       if (pf_stream_ && v + 1 < num_visits()) {  // quill: the next visit's weights and ring into L2 during the join
